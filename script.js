@@ -1,3 +1,67 @@
+// Web Audio APIのコンテキストを保持する変数 (ユーザー操作で初期化するためnullで開始)
+let audioCtx = null;
+// 💡 追加: 全体の音量を調整するためのマスターゲインノード
+let masterGainNode = null; 
+
+// 音を生成して再生する汎用関数
+// type: 'move', 'hit', 'clear'
+function playSound(type) {
+    // コンテキストまたはマスターゲインノードが未初期化の場合は中断
+    if (!audioCtx || !masterGainNode) {
+        return;
+    }
+    
+    // オシレーター（音源）と個別サウンドのゲイン（音量）を作成
+    const oscillator = audioCtx.createOscillator();
+    const soundGainNode = audioCtx.createGain(); // 個別サウンドのゲイン
+    
+    // 接続: オシレーター -> 個別ゲイン -> マスターゲイン -> 出力
+    oscillator.connect(soundGainNode);
+    soundGainNode.connect(masterGainNode); // 💡 マスターゲインに接続
+    
+    // サウンドパラメータを設定
+    let freq, duration, initialVolume;
+
+    switch (type) {
+        case 'move':
+            // 移動音: 短いクリック音
+            freq = 440; // A4
+            duration = 0.05;
+            initialVolume = 0.3; // 個別の音量設定
+            break;
+        case 'hit':
+            // 壁衝突音: 低いノイズ音
+            freq = 120; // 低い周波数
+            duration = 0.1;
+            initialVolume = 0.5;
+            break;
+        case 'clear':
+            // クリア音: ファンファーレのような上昇音
+            freq = 660; // E5
+            duration = 0.5;
+            initialVolume = 0.4;
+            // 周波数を時間経過で上昇させる（簡単なファンファーレ）
+            oscillator.frequency.linearRampToValueAtTime(880, audioCtx.currentTime + 0.2); // G#5 -> A5
+            break;
+        default:
+            return;
+    }
+
+    // 周波数を設定
+    oscillator.frequency.setValueAtTime(freq, audioCtx.currentTime);
+    soundGainNode.gain.setValueAtTime(initialVolume, audioCtx.currentTime); // 個別ゲインに初期音量を設定
+    
+    // サウンドの開始と終了
+    oscillator.start();
+    
+    // フェードアウト
+    soundGainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+
+    // オシレーターを停止してリソースを解放
+    oscillator.stop(audioCtx.currentTime + duration);
+}
+
+
 // ゲーム状態管理
 class GameState {
     constructor() {
@@ -20,7 +84,6 @@ class GameState {
     }
 
     // レベルをクリア
-    // 💡 修正点: 訪問した道の Set を受け取るように変更
     completeLevel(level, pathSet) {
         // pathSet (Setオブジェクト) を配列に変換して保存
         const pathArray = Array.from(pathSet);
@@ -128,7 +191,6 @@ function parseMazeFromImage(imageUrl) {
                 }
 
                 if (!start || !goal) {
-                    // 9x9の画像が滑らかなグラデーションを持つ可能性があるため、厳密な青/赤がない場合に備え、エラーメッセージを調整
                     throw new Error('迷路のスタート(青: 0,0,255)またはゴール(赤: 255,0,0)が見つかりませんでした。画像を確認してください。');
                 }
 
@@ -231,15 +293,69 @@ class MazeGame {
         this.minimapCtx = null;
         this.cellSize = 25;
         this.minimapCellSize = 8;
-        // 💡 既に読み込んだ迷路データ（レベル選択画面で再利用するため）
         this.parsedMazes = {}; 
-
+        
         this.init();
     }
 
     init() {
         this.setupEventListeners();
+        this.initAudio(); // 💡 追加: オーディオコンテキストの初期化
         this.showScreen('title');
+    }
+    
+    // 💡 修正・拡張: オーディオコンテキストとマスターゲインノードの初期化
+    initAudio() {
+        const slider = document.getElementById('volume-slider');
+        
+        // 💡 localStorageから保存された音量を読み込み、スライダーに適用
+        const savedVolume = localStorage.getItem('gameVolume');
+        if (savedVolume !== null) {
+            slider.value = savedVolume;
+        }
+
+        // 最初のユーザー操作時（どのボタンでもOK）にオーディオコンテキストを再開/作成
+        const audioInitHandler = () => {
+            if (!audioCtx) {
+                 try {
+                    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                    // 💡 マスターゲインノードの作成
+                    masterGainNode = audioCtx.createGain();
+                    masterGainNode.connect(audioCtx.destination);
+                    
+                    // 初期音量をスライダーの値に設定
+                    masterGainNode.gain.setValueAtTime(parseFloat(slider.value), audioCtx.currentTime);
+                } catch (e) {
+                    console.warn('Web Audio APIはサポートされていません:', e);
+                    // サポートされていない場合は以降の処理を中断
+                    return; 
+                }
+            }
+            
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+
+            // 最初の操作後にリスナーを削除
+            document.removeEventListener('click', audioInitHandler);
+            document.removeEventListener('keydown', audioInitHandler);
+        };
+
+        // ページ全体にリスナーを設定
+        document.addEventListener('click', audioInitHandler);
+        document.addEventListener('keydown', audioInitHandler);
+        
+        // 💡 音量スライダーのイベントリスナーを設定
+        slider.addEventListener('input', (e) => {
+            const volume = parseFloat(e.target.value);
+            // masterGainNodeが存在すれば音量を設定
+            if (masterGainNode) {
+                // 即座に値を設定する
+                masterGainNode.gain.setValueAtTime(volume, audioCtx.currentTime); 
+            }
+            // localStorageに音量を保存
+            localStorage.setItem('gameVolume', volume);
+        });
     }
 
     setupEventListeners() {
@@ -298,12 +414,11 @@ class MazeGame {
         for (let i = 1; i <= this.gameState.maxLevel; i++) {
             const button = document.createElement('button');
             button.className = 'level-button';
-            // レベル番号を文字として表示
             button.textContent = i;
 
             if (this.gameState.isLevelCompleted(i)) {
                 button.classList.add('completed');
-                this.addLevelPreview(button, i); // 💡 クリア済みの道筋をプレビュー描画
+                this.addLevelPreview(button, i);
             } else if (this.gameState.isLevelUnlocked(i)) {
                 button.classList.add('available');
             } else {
@@ -318,13 +433,9 @@ class MazeGame {
         }
     }
 
-    /**
-     * 💡 クリア済みのレベルボタンに、通った道を含むマッププレビューを描画
-     */
     async addLevelPreview(button, level) {
-        // レベル番号を前面に出すため、Canvasを背景として追加
         const mapCanvas = document.createElement('canvas');
-        mapCanvas.width = 100; // プレビューサイズ (CSSで調整される)
+        mapCanvas.width = 100;
         mapCanvas.height = 100;
         mapCanvas.className = 'level-preview-canvas';
         button.appendChild(mapCanvas);
@@ -332,17 +443,13 @@ class MazeGame {
         if (this.gameState.isLevelCompleted(level)) {
             try {
                 const config = MAZE_CONFIG[level];
-                // 迷路データをキャッシュから取得、なければ非同期で読み込む
                 const mazeData = this.parsedMazes[level] || await parseMazeFromImage(config.filename);
-                this.parsedMazes[level] = mazeData; // 読み込んだらキャッシュに保存
+                this.parsedMazes[level] = mazeData;
 
                 const ctx = mapCanvas.getContext('2d');
-                // 保存されたパスを取得
                 const pathSet = this.gameState.getCompletedPath(level);
-                // セルサイズを計算
                 const cellSize = mapCanvas.width / mazeData.width;
 
-                // 迷路とパスを描画
                 for (let y = 0; y < mazeData.height; y++) {
                     for (let x = 0; x < mazeData.width; x++) {
                         const drawX = x * cellSize;
@@ -350,26 +457,23 @@ class MazeGame {
 
                         const isWall = mazeData.walls.some(w => w.x === x && w.y === y);
 
-                        // 背景色（未訪問の通路/壁）
                         if (isWall) {
-                            ctx.fillStyle = 'rgba(51, 51, 51, 0.7)'; // 壁
+                            ctx.fillStyle = 'rgba(51, 51, 51, 0.7)';
                         } else {
-                            ctx.fillStyle = 'rgba(255, 255, 255, 0.3)'; // 通路（未訪問）
+                            ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
                         }
 
-                        // 通った道の色 (優先)
                         if (pathSet.has(`${x},${y}`)) {
-                            ctx.fillStyle = '#4CAF50'; // 通った道
+                            ctx.fillStyle = '#4CAF50'; 
                         }
 
                         ctx.fillRect(drawX, drawY, cellSize, cellSize);
 
-                        // スタート/ゴール
                         if (x === mazeData.start.x && y === mazeData.start.y) {
-                            ctx.fillStyle = '#0000FF'; // 青 (スタート)
+                            ctx.fillStyle = '#0000FF';
                             ctx.fillRect(drawX, drawY, cellSize, cellSize);
                         } else if (x === mazeData.goal.x && y === mazeData.goal.y) {
-                            ctx.fillStyle = '#F44336'; // 赤 (ゴール)
+                            ctx.fillStyle = '#F44336';
                             ctx.fillRect(drawX, drawY, cellSize, cellSize);
                         }
                     }
@@ -380,9 +484,6 @@ class MazeGame {
         }
     }
 
-    /**
-     * 指定されたレベルの迷路を画像から読み込み開始する (非同期処理)
-     */
     async startLevel(level) {
         const config = MAZE_CONFIG[level];
         if (!config) {
@@ -393,11 +494,10 @@ class MazeGame {
         this.gameState.currentLevel = level;
 
         try {
-            // 迷路データをキャッシュから取得、なければ非同期で読み込む
             const mazeData = this.parsedMazes[level] || await parseMazeFromImage(config.filename);
-            this.parsedMazes[level] = mazeData; // 読み込んだらキャッシュに保存
+            this.parsedMazes[level] = mazeData;
 
-            this.maze = new Maze(mazeData); // 画像から生成されたデータを使用
+            this.maze = new Maze(mazeData);
             this.player = new Player(this.maze.start.x, this.maze.start.y);
 
             this.canvas = document.getElementById('maze-canvas');
@@ -405,12 +505,10 @@ class MazeGame {
             this.minimapCanvas = document.getElementById('minimap-canvas');
             this.minimapCtx = this.minimapCanvas.getContext('2d');
 
-            // キャンバスサイズを迷路サイズに合わせて調整
             this.cellSize = Math.min(400 / this.maze.width, 400 / this.maze.height);
             this.canvas.width = this.maze.width * this.cellSize;
             this.canvas.height = this.maze.height * this.cellSize;
 
-            // ミニマップサイズも調整
             this.minimapCellSize = Math.min(150 / this.maze.width, 150 / this.maze.height);
             this.minimapCanvas.width = this.maze.width * this.minimapCellSize;
             this.minimapCanvas.height = this.maze.height * this.minimapCellSize;
@@ -421,10 +519,9 @@ class MazeGame {
             this.render();
 
         } catch (error) {
-            // 読み込み失敗時の処理
             alert(`レベル ${level} の読み込みに失敗しました。\nエラー: ${error.message || error}`);
             console.error(error);
-            this.showLevelSelect(); // エラー時はレベル選択画面に戻る
+            this.showLevelSelect();
         }
     }
 
@@ -456,17 +553,29 @@ class MazeGame {
     }
 
     movePlayer(dx, dy) {
-        if (this.player && this.player.move(dx, dy, this.maze)) {
+        const moved = this.player.move(dx, dy, this.maze);
+
+        if (moved) {
+            playSound('move'); // 💡 移動成功音
             this.render();
 
             if (this.player.isAtGoal(this.maze)) { 
                 this.completeLevel();
             }
+        } else {
+            // 壁に衝突した場合
+            const newX = this.player.x + dx;
+            const newY = this.player.y + dy;
+            if (this.maze.isWall(newX, newY)) {
+                playSound('hit'); // 💡 壁衝突音
+            }
+            // 壁衝突時もミニマップが更新されるようにrenderを呼ぶかどうかは任意だが、ここでは移動がないため省略
         }
     }
 
     completeLevel() {
-        // 💡 訪問済みセル (this.player.visitedCells) を保存のために渡す
+        playSound('clear'); // 💡 クリア音
+
         this.gameState.completeLevel(this.gameState.currentLevel, this.player.visitedCells);
 
         const nextLevel = this.gameState.currentLevel + 1;
@@ -493,7 +602,7 @@ class MazeGame {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
         // 視界範囲（3x3）を計算
-        const viewRange = 1; // プレイヤーの周り1マス（3x3の範囲）
+        const viewRange = 1;
 
         for (let y = 0; y < this.maze.height; y++) {
             for (let x = 0; x < this.maze.width; x++) {
@@ -558,7 +667,7 @@ class MazeGame {
                         ctx.fillStyle = '#333';
                     } else {
                         // 通路の色 (通った跡の色)
-                        ctx.fillStyle = '#333';
+                        ctx.fillStyle = '#fff';
                     }
                     ctx.fillRect(drawX, drawY, this.minimapCellSize, this.minimapCellSize);
 

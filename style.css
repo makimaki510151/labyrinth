@@ -44,91 +44,92 @@ body {
 
 /* レベル選択画面 */
 .level-select-container {
+    text-align: center;
     background: rgba(255, 255, 255, 0.9);
-    padding: 40px;
+    padding: 20px;
     border-radius: 20px;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-    max-width: 600px;
+    max-width: 800px;
     width: 100%;
 }
 
-.level-select-container h2 {
-    text-align: center;
-    font-size: 2rem;
-    color: #333;
-    margin-bottom: 30px;
-}
-
 .level-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
     gap: 15px;
-    margin-bottom: 30px;
+    margin: 20px 0;
+    padding: 10px;
 }
 
 .level-button {
-    aspect-ratio: 1;
-    border: none;
-    border-radius: 10px;
-    font-size: 1.5rem; /* 💡 修正点: 文字サイズを調整 */
+    width: 100px;
+    height: 100px;
+    font-size: 1.5rem;
     font-weight: bold;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    position: relative; /* 💡 修正点: Canvas配置の基準 */
+    border-radius: 15px;
+    transition: all 0.2s ease;
+    border: 3px solid #ccc;
+    position: relative;
     overflow: hidden;
-    z-index: 0; /* レベル番号のz-indexを考慮 */
-}
-
-.level-button.available {
-    background: linear-gradient(135deg, #4CAF50, #45a049);
-    color: white;
-}
-
-.level-button.completed {
-    /* 💡 修正点: マップが見えるように背景を調整 */
-    background: #444; 
-    color: white;
-    font-size: 2rem; /* レベル番号を大きく */
-    text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.5); /* 文字を見やすく */
-    
-}
-
-.level-button.locked {
-    background: #ccc;
-    color: #666;
+    color: #333;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background-color: #f0f0f0;
     cursor: not-allowed;
 }
 
-.level-button:not(.locked):hover {
-    transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+.level-button.available {
+    border-color: #2196F3;
+    background-color: #E3F2FD;
+    cursor: pointer;
 }
 
-/* 💡 新規追加: レベル選択画面のマッププレビューCanvas */
+.level-button.available:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 5px 10px rgba(33, 150, 243, 0.3);
+}
+
+.level-button.locked {
+    background-color: #aaa;
+    color: #666;
+    border-color: #666;
+}
+
+.level-button.completed {
+    border-color: #4CAF50;
+    background-color: #E8F5E9;
+    color: #4CAF50;
+    cursor: pointer;
+}
+
 .level-preview-canvas {
     position: absolute;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
-    opacity: 0.8; /* プレビューをはっきり表示 */
-    z-index: 1; /* ボタンテキストより下 */
-    pointer-events: none;
+    opacity: 0.7;
+    z-index: 1;
 }
 
-/* (既存の.level-previewは削除されました) */
-.level-preview {
-    display: none; /* 既存のpreviewクラスを非表示にする */
+.level-button span {
+    z-index: 2;
+    position: relative;
 }
 
 
 /* ゲーム画面 */
 .game-container {
     background: rgba(255, 255, 255, 0.95);
-    border-radius: 20px;
     padding: 20px;
+    border-radius: 20px;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-    max-width: 800px;
+    display: flex;
+    flex-direction: column;
+    max-width: 700px;
     width: 100%;
 }
 
@@ -136,33 +137,28 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 20px;
-    padding-bottom: 10px;
-    border-bottom: 2px solid #eee;
+    margin-bottom: 15px;
 }
 
 .game-header span {
-    font-size: 1.5rem;
+    font-size: 1.2rem;
     font-weight: bold;
-    color: #333;
 }
 
 .game-main {
     display: flex;
     gap: 20px;
-    align-items: flex-start;
+    width: 100%;
 }
 
 .maze-container {
-    flex: 1;
-}
-
-#maze-canvas {
-    border: 3px solid #333;
-    border-radius: 10px;
-    background: #fff;
-    max-width: 100%;
-    height: auto;
+    flex-grow: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border: 2px solid #333;
+    background-color: #000;
+    border-radius: 5px;
 }
 
 .game-sidebar {
@@ -174,21 +170,42 @@ body {
 
 .minimap-container {
     text-align: center;
-}
-
-.minimap-container h3 {
-    margin-bottom: 10px;
-    color: #333;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    background: #f9f9f9;
 }
 
 #minimap-canvas {
-    border: 2px solid #333;
+    border: 1px solid #333;
+    background: #555;
+}
+
+/* 💡 新規追加: 音量調節バーのスタイル */
+.volume-control {
+    text-align: center;
+    padding: 10px;
+    border: 1px solid #ccc;
     border-radius: 5px;
-    background: #fff;
+    background: #f9f9f9;
+}
+
+.volume-control label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+    color: #333;
+    font-size: 0.9rem;
+}
+
+#volume-slider {
+    width: 100%;
+    cursor: pointer;
 }
 
 /* コントロールボタン */
 .controls {
+    text-align: center;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -197,30 +214,23 @@ body {
 
 .control-row {
     display: flex;
+    justify-content: center;
     gap: 5px;
 }
 
 .control-btn {
-    width: 50px;
-    height: 50px;
-    border: none;
-    border-radius: 10px;
-    background: linear-gradient(135deg, #FF6B6B, #FF5252);
-    color: white;
+    width: 40px;
+    height: 40px;
     font-size: 1.2rem;
-    font-weight: bold;
+    border: 1px solid #333;
+    border-radius: 5px;
+    background-color: #ddd;
     cursor: pointer;
-    transition: all 0.2s ease;
-    user-select: none;
-}
-
-.control-btn:hover {
-    transform: scale(1.05);
-    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+    transition: background-color 0.1s;
 }
 
 .control-btn:active {
-    transform: scale(0.95);
+    background-color: #bbb;
 }
 
 /* クリア画面 */
@@ -233,18 +243,18 @@ body {
 }
 
 .clear-container h2 {
-    font-size: 3rem;
     color: #4CAF50;
-    margin-bottom: 20px;
+    font-size: 2.5rem;
+    margin-bottom: 15px;
 }
 
 .clear-container p {
-    font-size: 1.2rem;
-    color: #333;
+    font-size: 1.1rem;
     margin-bottom: 30px;
 }
 
-/* ボタン共通スタイル */
+
+/* メニューボタン共通 */
 .menu-button {
     padding: 15px 30px;
     font-size: 1.2rem;
@@ -282,47 +292,33 @@ body {
         flex-direction: column;
     }
     
+    /* 💡 修正: 音量調節とミニマップが横並びになるように調整 */
     .game-sidebar {
         min-width: auto;
         width: 100%;
         flex-direction: row;
         justify-content: space-between;
         align-items: center;
+        gap: 10px; 
+    }
+
+    .minimap-container,
+    .volume-control {
+        flex-basis: 30%; /* ミニマップと音量調節に幅を持たせる */
     }
     
     .controls {
-        flex-direction: column;
+        flex-basis: 30%;
     }
     
-    #maze-canvas {
-        width: 100%;
-        max-width: 350px;
-    }
-    
-    .level-grid {
-        grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
-    }
-}
-
-@media (max-width: 480px) {
-    .screen {
-        padding: 10px;
-    }
-    
-    .game-container {
-        padding: 15px;
-    }
-    
-    .title-container {
-        padding: 30px 15px;
-    }
-    
-    .title-container h1 {
-        font-size: 1.8rem;
-    }
-    
-    .menu-button {
-        padding: 12px 24px;
+    .control-btn {
+        width: 30px;
+        height: 30px;
         font-size: 1rem;
+    }
+
+    .game-container {
+        max-width: 100%;
+        padding: 10px;
     }
 }
