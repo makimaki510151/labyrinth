@@ -66,7 +66,7 @@ function playSound(type) {
 class GameState {
     constructor() {
         this.currentLevel = 1;
-        this.maxLevel = 6; // 総レベル数
+        this.maxLevel = 9; // 総レベル数
         this.progress = this.loadProgress();
         this.currentScreen = 'title';
     }
@@ -125,7 +125,10 @@ const MAZE_CONFIG = {
     3: { filename: 'maps/3.png' },
     4: { filename: 'maps/4.png' },
     5: { filename: 'maps/5.png' },
-    6: { filename: 'maps/6.png' }
+    6: { filename: 'maps/6.png' },
+    7: { filename: 'maps/7.png' },
+    8: { filename: 'maps/8.png' },
+    9: { filename: 'maps/9.png' },
 };
 
 // 迷路解析のためのカラーコード定数 (RGB形式)
