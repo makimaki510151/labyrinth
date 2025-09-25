@@ -1,0 +1,328 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Arial', sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.screen {
+    display: none;
+    width: 100%;
+    height: 100vh;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.screen.active {
+    display: flex;
+}
+
+/* タイトル画面 */
+.title-container {
+    text-align: center;
+    background: rgba(255, 255, 255, 0.9);
+    padding: 60px 40px;
+    border-radius: 20px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+.title-container h1 {
+    font-size: 3rem;
+    color: #333;
+    margin-bottom: 40px;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* レベル選択画面 */
+.level-select-container {
+    background: rgba(255, 255, 255, 0.9);
+    padding: 40px;
+    border-radius: 20px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    max-width: 600px;
+    width: 100%;
+}
+
+.level-select-container h2 {
+    text-align: center;
+    font-size: 2rem;
+    color: #333;
+    margin-bottom: 30px;
+}
+
+.level-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 15px;
+    margin-bottom: 30px;
+}
+
+.level-button {
+    aspect-ratio: 1;
+    border: none;
+    border-radius: 10px;
+    font-size: 1.5rem; /* 💡 修正点: 文字サイズを調整 */
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative; /* 💡 修正点: Canvas配置の基準 */
+    overflow: hidden;
+    z-index: 0; /* レベル番号のz-indexを考慮 */
+}
+
+.level-button.available {
+    background: linear-gradient(135deg, #4CAF50, #45a049);
+    color: white;
+}
+
+.level-button.completed {
+    /* 💡 修正点: マップが見えるように背景を調整 */
+    background: #444; 
+    color: white;
+    font-size: 2rem; /* レベル番号を大きく */
+    text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.5); /* 文字を見やすく */
+    
+}
+
+.level-button.locked {
+    background: #ccc;
+    color: #666;
+    cursor: not-allowed;
+}
+
+.level-button:not(.locked):hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+}
+
+/* 💡 新規追加: レベル選択画面のマッププレビューCanvas */
+.level-preview-canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0.8; /* プレビューをはっきり表示 */
+    z-index: 1; /* ボタンテキストより下 */
+    pointer-events: none;
+}
+
+/* (既存の.level-previewは削除されました) */
+.level-preview {
+    display: none; /* 既存のpreviewクラスを非表示にする */
+}
+
+
+/* ゲーム画面 */
+.game-container {
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 20px;
+    padding: 20px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    max-width: 800px;
+    width: 100%;
+}
+
+.game-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #eee;
+}
+
+.game-header span {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: #333;
+}
+
+.game-main {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+}
+
+.maze-container {
+    flex: 1;
+}
+
+#maze-canvas {
+    border: 3px solid #333;
+    border-radius: 10px;
+    background: #fff;
+    max-width: 100%;
+    height: auto;
+}
+
+.game-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    min-width: 180px;
+}
+
+.minimap-container {
+    text-align: center;
+}
+
+.minimap-container h3 {
+    margin-bottom: 10px;
+    color: #333;
+}
+
+#minimap-canvas {
+    border: 2px solid #333;
+    border-radius: 5px;
+    background: #fff;
+}
+
+/* コントロールボタン */
+.controls {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+}
+
+.control-row {
+    display: flex;
+    gap: 5px;
+}
+
+.control-btn {
+    width: 50px;
+    height: 50px;
+    border: none;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #FF6B6B, #FF5252);
+    color: white;
+    font-size: 1.2rem;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    user-select: none;
+}
+
+.control-btn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+}
+
+.control-btn:active {
+    transform: scale(0.95);
+}
+
+/* クリア画面 */
+.clear-container {
+    text-align: center;
+    background: rgba(255, 255, 255, 0.9);
+    padding: 60px 40px;
+    border-radius: 20px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+.clear-container h2 {
+    font-size: 3rem;
+    color: #4CAF50;
+    margin-bottom: 20px;
+}
+
+.clear-container p {
+    font-size: 1.2rem;
+    color: #333;
+    margin-bottom: 30px;
+}
+
+/* ボタン共通スタイル */
+.menu-button {
+    padding: 15px 30px;
+    font-size: 1.2rem;
+    font-weight: bold;
+    border: none;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    margin: 5px;
+}
+
+.menu-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+}
+
+.menu-button.small {
+    padding: 10px 20px;
+    font-size: 1rem;
+}
+
+/* レスポンシブデザイン */
+@media (max-width: 768px) {
+    .title-container h1 {
+        font-size: 2rem;
+    }
+    
+    .title-container {
+        padding: 40px 20px;
+    }
+    
+    .game-main {
+        flex-direction: column;
+    }
+    
+    .game-sidebar {
+        min-width: auto;
+        width: 100%;
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+    }
+    
+    .controls {
+        flex-direction: column;
+    }
+    
+    #maze-canvas {
+        width: 100%;
+        max-width: 350px;
+    }
+    
+    .level-grid {
+        grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+    }
+}
+
+@media (max-width: 480px) {
+    .screen {
+        padding: 10px;
+    }
+    
+    .game-container {
+        padding: 15px;
+    }
+    
+    .title-container {
+        padding: 30px 15px;
+    }
+    
+    .title-container h1 {
+        font-size: 1.8rem;
+    }
+    
+    .menu-button {
+        padding: 12px 24px;
+        font-size: 1rem;
+    }
+}

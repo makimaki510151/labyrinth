@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>迷路クリアゲーム</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- タイトル画面 -->
+    <div id="title-screen" class="screen active">
+        <div class="title-container">
+            <h1>迷路クリアゲーム</h1>
+            <button id="start-button" class="menu-button">スタート</button>
+        </div>
+    </div>
+
+    <!-- 迷路選択画面 -->
+    <div id="level-select-screen" class="screen">
+        <div class="level-select-container">
+            <h2>迷路を選択</h2>
+            <div id="level-grid" class="level-grid">
+                </div>
+            <button id="back-to-title" class="menu-button">タイトルに戻る</button>
+        </div>
+    </div>
+
+    <!-- ゲーム画面 -->
+    <div id="game-screen" class="screen">
+        <div class="game-container">
+            <div class="game-header">
+                <button id="back-to-select" class="menu-button small">戻る</button>
+                <span id="current-level">レベル 1</span>
+            </div>
+            
+            <div class="game-main">
+                <div class="maze-container">
+                    <canvas id="maze-canvas" width="400" height="400"></canvas>
+                </div>
+                
+                <div class="game-sidebar">
+                    <div class="minimap-container">
+                        <h3>ミニマップ</h3>
+                        <canvas id="minimap-canvas" width="150" height="150"></canvas>
+                    </div>
+                    
+                    <!-- スマホ用十字ボタン -->
+                    <div class="controls" id="mobile-controls">
+                        <div class="control-row">
+                            <button class="control-btn" id="up-btn">↑</button>
+                        </div>
+                        <div class="control-row">
+                            <button class="control-btn" id="left-btn">←</button>
+                            <button class="control-btn" id="down-btn">↓</button>
+                            <button class="control-btn" id="right-btn">→</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- クリア画面 -->
+    <div id="clear-screen" class="screen">
+        <div class="clear-container">
+            <h2>クリア！</h2>
+            <p id="clear-message">おめでとうございます！</p>
+            <button id="next-level-btn" class="menu-button">次のレベル</button>
+            <button id="back-to-select-clear" class="menu-button">レベル選択に戻る</button>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
+
