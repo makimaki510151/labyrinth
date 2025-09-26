@@ -389,10 +389,12 @@ class MazeGame {
             this.startLevel(this.gameState.currentLevel + 1);
         });
 
-        // キーボード操作
+        // 💡 修正: キーボード操作を全体で処理するように変更し、画面ごとにハンドラーを切り替える
         document.addEventListener('keydown', (e) => {
             if (this.gameState.currentScreen === 'game') {
-                this.handleKeyPress(e.key);
+                this.handleGameKeyPress(e.key);
+            } else if (this.gameState.currentScreen === 'clear') {
+                this.handleClearScreenKeyPress(e); // 💡 追加: クリア画面のキー操作ハンドラー
             }
         });
 
@@ -443,14 +445,111 @@ class MazeGame {
             btn.addEventListener('touchend', stopMove);
             btn.addEventListener('touchcancel', stopMove);
         });
+        
+        // 💡 追加: クリア画面のキーボードナビゲーションを初期設定
+        this.setupClearScreenKeyNavigation();
+    }
+    
+    // 💡 追加: クリア画面のキーボードナビゲーションのためのヘルパー関数
+    setupClearScreenKeyNavigation() {
+        // ボタンを配列として取得
+        this.clearScreenButtons = [
+            document.getElementById('next-level-btn'),
+            document.getElementById('back-to-select-clear')
+        ].filter(btn => btn); // 存在しないボタン (next-level-btnが非表示の場合など) を除外
+        
+        // すべてのクリア画面ボタンにtabindexを設定
+        this.clearScreenButtons.forEach((btn, index) => {
+            btn.setAttribute('tabindex', index + 1); // 1から開始
+        });
     }
 
+    // 💡 追加: クリア画面のキー操作を処理するハンドラー
+    handleClearScreenKeyPress(e) {
+        const buttons = this.clearScreenButtons.filter(btn => btn.style.display !== 'none'); // 現在表示されているボタンのみ
+        if (buttons.length === 0) return;
+
+        let focusedButton = document.activeElement;
+        let currentIndex = buttons.indexOf(focusedButton);
+
+        // Enter/Spaceでクリック
+        if (e.key === 'Enter' || e.key === ' ') {
+            if (focusedButton && focusedButton.classList.contains('menu-button')) {
+                e.preventDefault();
+                focusedButton.click();
+            }
+        // 上/下矢印キーでフォーカス移動
+        } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+            e.preventDefault(); // 画面スクロールを防ぐ
+            
+            let nextIndex = currentIndex;
+
+            if (e.key === 'ArrowLeft') {
+                nextIndex = (currentIndex + 1) % buttons.length;
+            } else if (e.key === 'ArrowRight') {
+                nextIndex = (currentIndex - 1 + buttons.length) % buttons.length;
+            }
+
+            // 初回 (currentIndexが-1) は最初のボタンにフォーカス
+            if (currentIndex === -1) {
+                nextIndex = 0;
+            }
+            
+            buttons[nextIndex].focus();
+        }
+        // Tabキーによる移動はブラウザのデフォルトに任せる (tabindexを設定済み)
+    }
+
+    // 💡 修正: ゲーム画面のキーボード操作を処理するハンドラーとして独立させる
+    handleGameKeyPress(key) {
+        let dx = 0, dy = 0;
+
+        switch (key.toLowerCase()) {
+            case 'w':
+            case 'arrowup':
+                dy = -1;
+                break;
+            case 's':
+            case 'arrowdown':
+                dy = 1;
+                break;
+            case 'a':
+            case 'arrowleft':
+                dx = -1;
+                break;
+            case 'd':
+            case 'arrowright':
+                dx = 1;
+                break;
+            default:
+                return;
+        }
+
+        this.movePlayer(dx, dy);
+    }
+    
+    // 💡 修正: showScreenで画面遷移時の処理を追加
     showScreen(screenName) {
         document.querySelectorAll('.screen').forEach(screen => {
             screen.classList.remove('active');
         });
         document.getElementById(`${screenName}-screen`).classList.add('active');
         this.gameState.currentScreen = screenName;
+        
+        // 💡 追記: 画面切り替え時に適切な要素にフォーカスを当てる
+        if (screenName === 'title') {
+            document.getElementById('start-button').focus();
+        } else if (screenName === 'level-select') {
+            // レベル選択画面では最初のアンロックされたボタンにフォーカスを当てるのが理想だが、
+            // シンプルに「タイトルに戻る」ボタンにフォーカスを当てておく
+            document.getElementById('back-to-title').focus();
+        } else if (screenName === 'clear') {
+            // クリア画面では次に進むボタンにフォーカスを当てる (completeLevelで処理)
+            // ここでは何もしない
+        } else {
+            // ゲーム画面など、その他の画面ではフォーカスを解除
+            document.activeElement.blur();
+        }
     }
 
     showLevelSelect() {
@@ -466,6 +565,9 @@ class MazeGame {
             const button = document.createElement('button');
             button.className = 'level-button';
             button.textContent = i;
+            
+            // 💡 追加: レベルボタンにtabindexを設定
+            button.setAttribute('tabindex', 0); // tabで選択可能にする
 
             if (this.gameState.isLevelCompleted(i)) {
                 button.classList.add('completed');
@@ -576,7 +678,12 @@ class MazeGame {
         }
     }
 
-    handleKeyPress(key) {
+    // 💡 変更: handleKeyPressから名称変更し、handleClearScreenKeyPressと分離
+    // WASD/矢印キーによる移動処理
+    // (中略 - 関数全体は省略、外部呼び出し側と移動ロジックは変更なし)
+    
+    // handleKeyPress -> handleGameKeyPressに名称変更し、他のキーロジックと分離
+    handleGameKeyPress(key) {
         let dx = 0, dy = 0;
 
         switch (key.toLowerCase()) {
@@ -602,6 +709,8 @@ class MazeGame {
 
         this.movePlayer(dx, dy);
     }
+    
+    // ... (movePlayer関数は変更なし)
 
     movePlayer(dx, dy) {
         // ゲーム画面でのみ移動を許可
@@ -643,8 +752,18 @@ class MazeGame {
         document.getElementById('clear-message').textContent =
             hasNextLevel ? 'おめでとうございます！次のレベルに挑戦しましょう！' : 'すべてのレベルをクリアしました！';
 
-        document.getElementById('next-level-btn').style.display =
-            hasNextLevel ? 'inline-block' : 'none';
+        const nextBtn = document.getElementById('next-level-btn');
+        const backBtn = document.getElementById('back-to-select-clear');
+
+        if (hasNextLevel) {
+            nextBtn.style.display = 'inline-block';
+            // 💡 追加: 次のレベルがある場合、「次のレベル」ボタンにフォーカスを当てる
+            nextBtn.focus(); 
+        } else {
+            nextBtn.style.display = 'none';
+            // 💡 追加: 次のレベルがない場合、「レベル選択に戻る」ボタンにフォーカスを当てる
+            backBtn.focus();
+        }
 
         this.showScreen('clear');
     }
