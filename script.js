@@ -299,6 +299,10 @@ class MazeGame {
         this.cellSize = 25;
         this.minimapCellSize = 8;
         this.parsedMazes = {};
+        
+        // 💡 追加: 長押し移動のためのタイマー
+        this.moveTimer = null;
+        this.moveInterval = 100; // 連続移動の間隔 (ms)
 
         this.init();
     }
@@ -393,10 +397,52 @@ class MazeGame {
         });
 
         // モバイルコントロール
-        document.getElementById('up-btn').addEventListener('click', () => this.movePlayer(0, -1));
-        document.getElementById('down-btn').addEventListener('click', () => this.movePlayer(0, 1));
-        document.getElementById('left-btn').addEventListener('click', () => this.movePlayer(-1, 0));
-        document.getElementById('right-btn').addEventListener('click', () => this.movePlayer(1, 0));
+        const controlButtons = {
+            'up-btn': { dx: 0, dy: -1 },
+            'down-btn': { dx: 0, dy: 1 },
+            'left-btn': { dx: -1, dy: 0 },
+            'right-btn': { dx: 1, dy: 0 }
+        };
+
+        Object.keys(controlButtons).forEach(id => {
+            const btn = document.getElementById(id);
+            const { dx, dy } = controlButtons[id];
+
+            // 💡 追加: 長押し処理の開始
+            const startMove = (e) => {
+                e.preventDefault(); // モバイルでの誤操作防止
+                if (this.gameState.currentScreen !== 'game') return;
+
+                // 既にタイマーがある場合はスキップ
+                if (this.moveTimer) return;
+
+                // 最初の移動を実行
+                this.movePlayer(dx, dy);
+
+                // 連続移動タイマーを設定
+                this.moveTimer = setInterval(() => {
+                    this.movePlayer(dx, dy);
+                }, this.moveInterval);
+            };
+
+            // 💡 追加: 長押し処理の停止
+            const stopMove = () => {
+                if (this.moveTimer) {
+                    clearInterval(this.moveTimer);
+                    this.moveTimer = null;
+                }
+            };
+
+            // マウスイベント
+            btn.addEventListener('mousedown', startMove);
+            btn.addEventListener('mouseup', stopMove);
+            btn.addEventListener('mouseleave', stopMove); // ボタン外でリリースした場合も停止
+
+            // タッチイベント (モバイル対応)
+            btn.addEventListener('touchstart', startMove, { passive: false }); // passive: false で preventDefault() を有効にする
+            btn.addEventListener('touchend', stopMove);
+            btn.addEventListener('touchcancel', stopMove);
+        });
     }
 
     showScreen(screenName) {
@@ -558,6 +604,9 @@ class MazeGame {
     }
 
     movePlayer(dx, dy) {
+        // ゲーム画面でのみ移動を許可
+        if (this.gameState.currentScreen !== 'game') return;
+        
         const moved = this.player.move(dx, dy, this.maze);
 
         if (moved) {
@@ -565,6 +614,11 @@ class MazeGame {
             this.render();
 
             if (this.player.isAtGoal(this.maze)) {
+                // ゴールに到達したら連続移動を停止
+                if (this.moveTimer) {
+                    clearInterval(this.moveTimer);
+                    this.moveTimer = null;
+                }
                 this.completeLevel();
             }
         } else {
