@@ -1,7 +1,7 @@
 // Web Audio APIのコンテキストを保持する変数 (ユーザー操作で初期化するためnullで開始)
 let audioCtx = null;
 // 💡 追加: 全体の音量を調整するためのマスターゲインノード
-let masterGainNode = null; 
+let masterGainNode = null;
 
 // 音を生成して再生する汎用関数
 // type: 'move', 'hit', 'clear'
@@ -10,15 +10,15 @@ function playSound(type) {
     if (!audioCtx || !masterGainNode) {
         return;
     }
-    
+
     // オシレーター（音源）と個別サウンドのゲイン（音量）を作成
     const oscillator = audioCtx.createOscillator();
     const soundGainNode = audioCtx.createGain(); // 個別サウンドのゲイン
-    
+
     // 接続: オシレーター -> 個別ゲイン -> マスターゲイン -> 出力
     oscillator.connect(soundGainNode);
     soundGainNode.connect(masterGainNode); // 💡 マスターゲインに接続
-    
+
     // サウンドパラメータを設定
     let freq, duration, initialVolume;
 
@@ -50,10 +50,10 @@ function playSound(type) {
     // 周波数を設定
     oscillator.frequency.setValueAtTime(freq, audioCtx.currentTime);
     soundGainNode.gain.setValueAtTime(initialVolume, audioCtx.currentTime); // 個別ゲインに初期音量を設定
-    
+
     // サウンドの開始と終了
     oscillator.start();
-    
+
     // フェードアウト
     soundGainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
 
@@ -120,7 +120,7 @@ class GameState {
 // 迷路データ設定 (画像ファイル名と色定義)
 const MAZE_CONFIG = {
     // ユーザー様がアップロードされた画像をレベル1として仮設定
-    1: { filename: 'maps/1.png' }, 
+    1: { filename: 'maps/1.png' },
     2: { filename: 'maps/2.png' },
     3: { filename: 'maps/3.png' },
     4: { filename: 'maps/4.png' },
@@ -130,6 +130,7 @@ const MAZE_CONFIG = {
     8: { filename: 'maps/8.png' },
     9: { filename: 'maps/9.png' },
     10: { filename: 'maps/10.png' },
+    11: { filename: 'maps/11.png' },
 };
 
 // 迷路解析のためのカラーコード定数 (RGB形式)
@@ -297,8 +298,8 @@ class MazeGame {
         this.minimapCtx = null;
         this.cellSize = 25;
         this.minimapCellSize = 8;
-        this.parsedMazes = {}; 
-        
+        this.parsedMazes = {};
+
         this.init();
     }
 
@@ -307,11 +308,11 @@ class MazeGame {
         this.initAudio(); // 💡 追加: オーディオコンテキストの初期化
         this.showScreen('title');
     }
-    
+
     // 💡 修正・拡張: オーディオコンテキストとマスターゲインノードの初期化
     initAudio() {
         const slider = document.getElementById('volume-slider');
-        
+
         // 💡 localStorageから保存された音量を読み込み、スライダーに適用
         const savedVolume = localStorage.getItem('gameVolume');
         if (savedVolume !== null) {
@@ -321,21 +322,21 @@ class MazeGame {
         // 最初のユーザー操作時（どのボタンでもOK）にオーディオコンテキストを再開/作成
         const audioInitHandler = () => {
             if (!audioCtx) {
-                 try {
+                try {
                     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                     // 💡 マスターゲインノードの作成
                     masterGainNode = audioCtx.createGain();
                     masterGainNode.connect(audioCtx.destination);
-                    
+
                     // 初期音量をスライダーの値に設定
                     masterGainNode.gain.setValueAtTime(parseFloat(slider.value), audioCtx.currentTime);
                 } catch (e) {
                     console.warn('Web Audio APIはサポートされていません:', e);
                     // サポートされていない場合は以降の処理を中断
-                    return; 
+                    return;
                 }
             }
-            
+
             if (audioCtx.state === 'suspended') {
                 audioCtx.resume();
             }
@@ -348,14 +349,14 @@ class MazeGame {
         // ページ全体にリスナーを設定
         document.addEventListener('click', audioInitHandler);
         document.addEventListener('keydown', audioInitHandler);
-        
+
         // 💡 音量スライダーのイベントリスナーを設定
         slider.addEventListener('input', (e) => {
             const volume = parseFloat(e.target.value);
             // masterGainNodeが存在すれば音量を設定
             if (masterGainNode) {
                 // 即座に値を設定する
-                masterGainNode.gain.setValueAtTime(volume, audioCtx.currentTime); 
+                masterGainNode.gain.setValueAtTime(volume, audioCtx.currentTime);
             }
             // localStorageに音量を保存
             localStorage.setItem('gameVolume', volume);
@@ -468,7 +469,7 @@ class MazeGame {
                         }
 
                         if (pathSet.has(`${x},${y}`)) {
-                            ctx.fillStyle = '#4CAF50'; 
+                            ctx.fillStyle = '#4CAF50';
                         }
 
                         ctx.fillRect(drawX, drawY, cellSize, cellSize);
@@ -563,7 +564,7 @@ class MazeGame {
             playSound('move'); // 💡 移動成功音
             this.render();
 
-            if (this.player.isAtGoal(this.maze)) { 
+            if (this.player.isAtGoal(this.maze)) {
                 this.completeLevel();
             }
         } else {
@@ -680,7 +681,7 @@ class MazeGame {
                         ctx.fillStyle = '#F44336';
                         ctx.fillRect(drawX, drawY, this.minimapCellSize, this.minimapCellSize);
                     } else if (x === this.maze.start.x && y === this.maze.start.y) {
-                         ctx.fillStyle = '#0000FF';
+                        ctx.fillStyle = '#0000FF';
                         ctx.fillRect(drawX, drawY, this.minimapCellSize, this.minimapCellSize);
                     }
                 }
