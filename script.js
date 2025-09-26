@@ -3,6 +3,11 @@ let audioCtx = null;
 // 💡 追加: 全体の音量を調整するためのマスターゲインノード
 let masterGainNode = null;
 
+// 💡 修正: 迷路表示に関する定数
+const CONTAINER_SIZE = 500; // 迷路コンテナの固定サイズ (CSSと合わせる)
+const MIN_CELL_SIZE = 20; // 💡 修正: プレイヤーのセルがこれより小さくならないようにする最小サイズ (40pxから25pxに緩和)
+const MAX_VISIBLE_CELLS = 25; // 💡 修正: 画面に表示したい最大のグリッド数 (19x19)
+
 // 音を生成して再生する汎用関数
 // type: 'move', 'hit', 'clear'
 function playSound(type) {
@@ -67,11 +72,11 @@ class GameState {
     constructor() {
         this.currentLevel = 1;
         // 💡 変更: 初期値は0とし、後にMazeGame.initで動的に設定される
-        this.maxLevel = 0; 
+        this.maxLevel = 0;
         this.progress = this.loadProgress();
         this.currentScreen = 'title';
     }
-    
+
     // 💡 追加: maxLevelを設定するメソッド
     setMaxLevel(level) {
         this.maxLevel = level;
@@ -123,7 +128,6 @@ class GameState {
     }
 }
 
-// 💡 変更: MAZE_CONFIGを削除し、代わりにファイル名を返す関数を定義
 /**
  * 指定されたレベル番号に対応する迷路画像ファイル名を取得
  * @param {number} level 
@@ -295,12 +299,13 @@ class MazeGame {
         this.gameState = new GameState();
         this.maze = null;
         this.player = null;
-        this.canvas = null;
+        this.canvas = null; // メイン迷路Canvas
         this.ctx = null;
-        // 💡 削除: ミニマップ関連のプロパティを削除
+        this.minimapCanvas = null; // 💡 追加: ミニマップCanvas
+        this.minimapCtx = null; // 💡 追加: ミニマップCtx
         this.cellSize = 25;
         this.parsedMazes = {};
-        
+
         // 💡 追加: 長押し移動のためのタイマー
         this.moveTimer = null;
         this.moveInterval = 100; // 連続移動の間隔 (ms)
@@ -322,7 +327,7 @@ class MazeGame {
     async determineMaxLevel() {
         const MAX_CHECK_LIMIT = 99; // 念のためチェックの上限を設定
         let maxLevel = 0;
-        
+
         // 1から順番にファイルが存在するかチェック
         for (let i = 1; i <= MAX_CHECK_LIMIT; i++) {
             const config = getMazeConfig(i);
@@ -336,10 +341,10 @@ class MazeGame {
                 break;
             }
         }
-        
+
         this.gameState.setMaxLevel(maxLevel);
         console.log(`検知された最大レベル数: ${maxLevel}`);
-        
+
         if (maxLevel === 0) {
             console.error("マップファイル(maps/1.png, maps/2.png...)が一つも見つかりませんでした。");
         }
@@ -477,11 +482,11 @@ class MazeGame {
             btn.addEventListener('touchend', stopMove);
             btn.addEventListener('touchcancel', stopMove);
         });
-        
+
         // 💡 追加: クリア画面のキーボードナビゲーションを初期設定
         this.setupClearScreenKeyNavigation();
     }
-    
+
     // 💡 追加: クリア画面のキーボードナビゲーションのためのヘルパー関数
     setupClearScreenKeyNavigation() {
         // ボタンを配列として取得
@@ -489,7 +494,7 @@ class MazeGame {
             document.getElementById('next-level-btn'),
             document.getElementById('back-to-select-clear')
         ].filter(btn => btn); // 存在しないボタン (next-level-btnが非表示の場合など) を除外
-        
+
         // すべてのクリア画面ボタンにtabindexを設定
         this.clearScreenButtons.forEach((btn, index) => {
             btn.setAttribute('tabindex', index + 1); // 1から開始
@@ -510,10 +515,10 @@ class MazeGame {
                 e.preventDefault();
                 focusedButton.click();
             }
-        // 上/下矢印キーでフォーカス移動
+            // 上/下矢印キーでフォーカス移動
         } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
             e.preventDefault(); // 画面スクロールを防ぐ
-            
+
             let nextIndex = currentIndex;
 
             if (e.key === 'ArrowDown') {
@@ -526,7 +531,7 @@ class MazeGame {
             if (currentIndex === -1) {
                 nextIndex = 0;
             }
-            
+
             buttons[nextIndex].focus();
         }
         // Tabキーによる移動はブラウザのデフォルトに任せる (tabindexを設定済み)
@@ -559,7 +564,7 @@ class MazeGame {
 
         this.movePlayer(dx, dy);
     }
-    
+
     // 💡 修正: showScreenで画面遷移時の処理を追加
     showScreen(screenName) {
         document.querySelectorAll('.screen').forEach(screen => {
@@ -567,7 +572,7 @@ class MazeGame {
         });
         document.getElementById(`${screenName}-screen`).classList.add('active');
         this.gameState.currentScreen = screenName;
-        
+
         // 💡 追記: 画面切り替え時に適切な要素にフォーカスを当てる
         if (screenName === 'title') {
             document.getElementById('start-button').focus();
@@ -600,7 +605,7 @@ class MazeGame {
             const button = document.createElement('button');
             button.className = 'level-button';
             button.textContent = i;
-            
+
             // 💡 追加: レベルボタンにtabindexを設定
             button.setAttribute('tabindex', 0); // tabで選択可能にする
 
@@ -632,8 +637,8 @@ class MazeGame {
         if (this.gameState.isLevelCompleted(level)) {
             try {
                 // 💡 変更: determineMaxLevelで既に読み込み済み（parsedMazesにキャッシュ済み）のデータを使用
-                const mazeData = this.parsedMazes[level]; 
-                
+                const mazeData = this.parsedMazes[level];
+
                 // データがない場合は再読み込み（基本的には不要だが安全のため）
                 if (!mazeData) {
                     const config = getMazeConfig(level);
@@ -688,10 +693,8 @@ class MazeGame {
         this.gameState.currentLevel = level;
 
         try {
-            // 💡 変更: determineMaxLevelで既に読み込み済み（parsedMazesにキャッシュ済み）のデータを使用
-            let mazeData = this.parsedMazes[level]; 
+            let mazeData = this.parsedMazes[level];
 
-            // データがキャッシュにない場合は読み込み（初めてのレベルの場合や、エラー処理）
             if (!mazeData) {
                 mazeData = await parseMazeFromImage(config.filename);
                 this.parsedMazes[level] = mazeData;
@@ -702,18 +705,31 @@ class MazeGame {
 
             this.canvas = document.getElementById('maze-canvas');
             this.ctx = this.canvas.getContext('2d');
-            // 💡 削除: ミニマップ関連のプロパティを初期化から削除
-            // this.minimapCanvas = document.getElementById('minimap-canvas');
-            // this.minimapCtx = this.minimapCanvas.getContext('2d');
 
-            this.cellSize = Math.min(400 / this.maze.width, 400 / this.maze.height);
-            this.canvas.width = this.maze.width * this.cellSize;
-            this.canvas.height = this.maze.height * this.cellSize;
+            this.minimapCanvas = document.getElementById('minimap-canvas');
+            this.minimapCtx = this.minimapCanvas.getContext('2d');
 
-            // 💡 削除: ミニマップ関連のサイズ計算を削除
-            // this.minimapCellSize = Math.min(150 / this.maze.width, 150 / this.maze.height);
-            // this.minimapCanvas.width = this.maze.width * this.minimapCellSize;
-            // this.minimapCanvas.height = this.maze.height * this.minimapCellSize;
+            // 💡 修正: cellSizeの計算ロジックを変更
+            // 1. 常に500px / 19マスでセルサイズを計算 (約26.31px)
+            const fixedVisibleCellSize = CONTAINER_SIZE / MAX_VISIBLE_CELLS;
+
+            // 2. 迷路全体が収まる最大のセルサイズ
+            const maxFitCellSize = Math.min(CONTAINER_SIZE / this.maze.width, CONTAINER_SIZE / this.maze.height);
+
+            // 3. 最終的なcellSizeの決定
+            if (this.maze.width <= MAX_VISIBLE_CELLS && this.maze.height <= MAX_VISIBLE_CELLS) {
+                // 迷路全体が19x19より小さい場合:
+                // 迷路全体が収まる最大のサイズを採用し、MIN_CELL_SIZEを下回らないようにする
+                this.cellSize = Math.max(MIN_CELL_SIZE, maxFitCellSize);
+            } else {
+                // 迷路が19x19より大きい場合（カメラ追従が必要な場合）:
+                // 500px/19のサイズを採用し、MIN_CELL_SIZEを下回らないようにする
+                this.cellSize = Math.max(MIN_CELL_SIZE, fixedVisibleCellSize);
+            }
+
+            // Canvasのサイズは500pxに固定（CSSと合わせる）
+            this.canvas.width = CONTAINER_SIZE;
+            this.canvas.height = CONTAINER_SIZE;
 
             document.getElementById('current-level').textContent = `レベル ${level}`;
 
@@ -754,13 +770,11 @@ class MazeGame {
 
         this.movePlayer(dx, dy);
     }
-    
-    // ... (movePlayer関数は変更なし)
 
     movePlayer(dx, dy) {
         // ゲーム画面でのみ移動を許可
         if (this.gameState.currentScreen !== 'game') return;
-        
+
         const moved = this.player.move(dx, dy, this.maze);
 
         if (moved) {
@@ -782,7 +796,6 @@ class MazeGame {
             if (this.maze.isWall(newX, newY)) {
                 playSound('hit'); // 💡 壁衝突音
             }
-            // 壁衝突時もミニマップが更新されるようにrenderを呼ぶかどうかは任意だが、ここでは移動がないため省略
         }
     }
 
@@ -803,7 +816,7 @@ class MazeGame {
         if (hasNextLevel) {
             nextBtn.style.display = 'inline-block';
             // 💡 追加: 次のレベルがある場合、「次のレベル」ボタンにフォーカスを当てる
-            nextBtn.focus(); 
+            nextBtn.focus();
         } else {
             nextBtn.style.display = 'none';
             // 💡 追加: 次のレベルがない場合、「レベル選択に戻る」ボタンにフォーカスを当てる
@@ -815,28 +828,74 @@ class MazeGame {
 
     render() {
         this.renderMaze();
-        // 💡 削除: renderMinimapの呼び出しを削除
-        // this.renderMinimap(); 
+        this.renderMinimap(); // 💡 復活: ミニマップの描画を呼び出し
     }
 
     renderMaze() {
         const ctx = this.ctx;
         const canvas = this.canvas;
+        const viewRange = 1; // 視界範囲（3x3）はそのまま
 
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        // 視界範囲（3x3）を計算
-        const viewRange = 1;
+        let startX, startY, endX, endY;
+        let offsetX = 0;
+        let offsetY = 0;
 
-        for (let y = 0; y < this.maze.height; y++) {
-            for (let x = 0; x < this.maze.width; x++) {
+        const W_MAZE = this.maze.width;
+        const H_MAZE = this.maze.height;
+        const W_VIEW = MAX_VISIBLE_CELLS;
+        const H_VIEW = MAX_VISIBLE_CELLS;
+        const HALF_VIEW = Math.floor(W_VIEW / 2); // 9
+
+        // 迷路の幅/高さが MAX_VISIBLE_CELLS より小さい場合
+        if (W_MAZE <= W_VIEW && H_MAZE <= H_VIEW) {
+            // 迷路全体を描画し、中央に配置
+            startX = 0;
+            startY = 0;
+            endX = W_MAZE - 1;
+            endY = H_MAZE - 1;
+            // 描画オフセット: 迷路をCanvasの中央に寄せる
+            offsetX = (canvas.width - W_MAZE * this.cellSize) / 2;
+            offsetY = (canvas.height - H_MAZE * this.cellSize) / 2;
+        } else {
+            // 迷路が19x19より大きい場合 (カメラ追従)
+
+            // X軸方向の描画開始座標 (viewPortStartX) を計算し、迷路の端にクランプする
+            let viewPortStartX = this.player.x - HALF_VIEW;
+            viewPortStartX = Math.max(0, viewPortStartX); // 左端 (0) にクランプ
+            viewPortStartX = Math.min(W_MAZE - W_VIEW, viewPortStartX); // 右端 (W_MAZE - W_VIEW) にクランプ
+
+            // Y軸方向の描画開始座標 (viewPortStartY) を計算し、迷路の端にクランプする
+            let viewPortStartY = this.player.y - HALF_VIEW;
+            viewPortStartY = Math.max(0, viewPortStartY); // 上端 (0) にクランプ
+            viewPortStartY = Math.min(H_MAZE - H_VIEW, viewPortStartY); // 下端 (H_MAZE - H_VIEW) にクランプ
+
+            // 描画オフセット: 画面の左上隅 (0,0) が迷路のどこに相当するか
+            offsetX = -viewPortStartX * this.cellSize;
+            offsetY = -viewPortStartY * this.cellSize;
+
+            // 実際に描画するセル範囲を調整
+            startX = viewPortStartX;
+            endX = viewPortStartX + W_VIEW - 1;
+            startY = viewPortStartY;
+            endY = viewPortStartY + H_VIEW - 1;
+        }
+
+        // 迷路の描画ループ
+        for (let y = startY; y <= endY; y++) {
+            for (let x = startX; x <= endX; x++) {
+                const drawX = x * this.cellSize + offsetX;
+                const drawY = y * this.cellSize + offsetY;
+
+                // 迷路の境界外はスキップ (このロジックでは基本的に不要だが安全のため)
+                if (x < 0 || x >= W_MAZE || y < 0 || y >= H_MAZE) continue;
+
                 const isInView = Math.abs(x - this.player.x) <= viewRange &&
                     Math.abs(y - this.player.y) <= viewRange;
                 const hasVisited = this.player.hasVisited(x, y);
 
                 if (isInView || hasVisited) {
-                    const drawX = x * this.cellSize;
-                    const drawY = y * this.cellSize;
 
                     if (this.maze.isWall(x, y)) {
                         ctx.fillStyle = '#333';
@@ -861,19 +920,82 @@ class MazeGame {
             }
         }
 
-        // プレイヤー
-        const playerX = this.player.x * this.cellSize;
-        const playerY = this.player.y * this.cellSize;
+        // プレイヤーの描画
+        // プレイヤーの画面上での座標を計算
+        const playerScreenX = this.player.x * this.cellSize + offsetX;
+        const playerScreenY = this.player.y * this.cellSize + offsetY;
+
         ctx.fillStyle = '#4CAF50';
         ctx.beginPath();
-        ctx.arc(playerX + this.cellSize / 2, playerY + this.cellSize / 2, this.cellSize / 3, 0, Math.PI * 2);
+        ctx.arc(playerScreenX + this.cellSize / 2, playerScreenY + this.cellSize / 2, this.cellSize / 3, 0, Math.PI * 2);
         ctx.fill();
     }
 
     /**
-     * 💡 削除: ミニマップの描画関数を削除
+     * 💡 復活: ミニマップの描画関数
      */
-    // renderMinimap() { ... }
+    renderMinimap() {
+        const ctx = this.minimapCtx;
+        const canvas = this.minimapCanvas;
+        const maze = this.maze;
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // 1. 背景を未探索エリア（壁の色）で塗りつぶす
+        ctx.fillStyle = '#333';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // 迷路全体が収まるようにセルサイズを計算
+        const cellSize = Math.min(canvas.width / maze.width, canvas.height / maze.height);
+
+        // 迷路全体を中央に配置するためのオフセットを計算
+        const totalWidth = maze.width * cellSize;
+        const totalHeight = maze.height * cellSize;
+        const offsetX = (canvas.width - totalWidth) / 2;
+        const offsetY = (canvas.height - totalHeight) / 2;
+
+        for (let y = 0; y < maze.height; y++) {
+            for (let x = 0; x < maze.width; x++) {
+                const drawX = x * cellSize + offsetX;
+                const drawY = y * cellSize + offsetY;
+                const hasVisited = this.player.hasVisited(x, y);
+
+                const isWall = maze.isWall(x, y);
+
+                // 2. 描画するのは「壁」または「訪問済みセル」のみ
+                if (isWall) {
+                    // 壁は常に描画
+                    ctx.fillStyle = '#333';
+                    ctx.fillRect(drawX, drawY, cellSize, cellSize);
+                } else if (hasVisited) {
+                    // 訪問済みの通路
+                    ctx.fillStyle = '#ADD8E6'; // 訪問済み通路: 明るい水色
+                    ctx.fillRect(drawX, drawY, cellSize, cellSize);
+                }
+                // 未訪問の通路は描画しない（背景色(#333)のまま）
+
+                // 3. スタートとゴール (通路が描画された後に上書きする)
+                if (x === maze.start.x && y === maze.start.y) {
+                    ctx.fillStyle = '#0000FF'; // スタート: 青
+                    ctx.fillRect(drawX, drawY, cellSize, cellSize);
+                } else if (x === maze.goal.x && y === maze.goal.y) {
+                    // ゴールは、訪問済みの場合のみ描画する
+                    if (hasVisited) {
+                        ctx.fillStyle = '#FF0000'; // ゴール: 赤
+                        ctx.fillRect(drawX, drawY, cellSize, cellSize);
+                    }
+                }
+
+                // プレイヤーの位置
+                if (x === this.player.x && y === this.player.y) {
+                    ctx.fillStyle = '#4CAF50'; // プレイヤー: 緑
+                    ctx.beginPath();
+                    ctx.arc(drawX + cellSize / 2, drawY + cellSize / 2, cellSize / 3, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+        }
+    }
 }
 
 // ゲーム開始

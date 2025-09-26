@@ -129,7 +129,7 @@ body {
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
     display: flex;
     flex-direction: column;
-    max-width: 700px;
+    max-width: 750px; 
     width: 100%;
 }
 
@@ -159,6 +159,10 @@ body {
     border: 2px solid #333;
     background-color: #000;
     border-radius: 5px;
+    /* 修正: 迷路表示エリアの最大サイズを固定 */
+    max-width: 500px;
+    max-height: 500px;
+    overflow: hidden; 
 }
 
 .game-sidebar {
@@ -168,7 +172,7 @@ body {
     min-width: 180px;
 }
 
-/* 💡 削除: ミニマップのスタイルを削除
+/* 💡 追加: ミニマップコンテナのスタイル */
 .minimap-container {
     text-align: center;
     padding: 10px;
@@ -177,11 +181,17 @@ body {
     background: #f9f9f9;
 }
 
+.minimap-container h3 {
+    font-size: 1rem;
+    margin-bottom: 5px;
+    color: #333;
+}
+
 #minimap-canvas {
     border: 1px solid #333;
-    background: #555;
+    display: block; /* センター寄せのため */
+    margin: 0 auto;
 }
-*/
 
 /* 音量調節バーのスタイル */
 .volume-control {
@@ -212,7 +222,6 @@ body {
     flex-direction: column;
     align-items: center;
     gap: 10px;
-    /* ボタン間の間隔を少し広げる */
 }
 
 .control-row {
@@ -223,18 +232,13 @@ body {
 
 .control-btn {
     width: 50px;
-    /* PC/大型タブレットでのデフォルトサイズを大きく */
     height: 50px;
     font-size: 1.5rem;
-    /* 文字も大きく */
     border: 2px solid #333;
-    /* 境界線も太く */
     border-radius: 8px;
-    /* 角を少し丸く */
     background-color: #ddd;
     cursor: pointer;
     transition: background-color 0.1s;
-    /* タッチ操作のためのプロパティ追加 */
     touch-action: manipulation;
 }
 
@@ -301,8 +305,6 @@ body {
         flex-direction: column;
     }
 
-    /* 💡 修正: モバイルでサイドバーのアイテムを縦に並べる設定は維持しつつ、
-             index.htmlで順番が変わったため、特にCSSで順序を強制する必要はない */
     .game-sidebar {
         min-width: auto;
         width: 100%;
@@ -316,6 +318,11 @@ body {
         width: 100%;
     }
 
+    /* 💡 追加: モバイルではミニマップを非表示にするか、幅いっぱいに使う */
+    .minimap-container {
+        width: 100%;
+    }
+    
     .controls {
         flex-basis: auto; 
         gap: 5px; 
