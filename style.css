@@ -168,6 +168,7 @@ body {
     min-width: 180px;
 }
 
+/* 💡 削除: ミニマップのスタイルを削除
 .minimap-container {
     text-align: center;
     padding: 10px;
@@ -180,8 +181,9 @@ body {
     border: 1px solid #333;
     background: #555;
 }
+*/
 
-/* 💡 新規追加: 音量調節バーのスタイル */
+/* 音量調節バーのスタイル */
 .volume-control {
     text-align: center;
     padding: 10px;
@@ -299,27 +301,25 @@ body {
         flex-direction: column;
     }
 
-    /* 💡 修正: 音量調節とミニマップが横並びになるように調整 */
+    /* 💡 修正: モバイルでサイドバーのアイテムを縦に並べる設定は維持しつつ、
+             index.htmlで順番が変わったため、特にCSSで順序を強制する必要はない */
     .game-sidebar {
         min-width: auto;
         width: 100%;
-        /* 縦に並べる設定に変更 */
         flex-direction: column;
         gap: 15px;
         align-items: stretch;
-        /* 幅いっぱいに広げる */
     }
 
-    .minimap-container,
     .volume-control {
-        flex-basis: auto; /* サイズの強制指定を解除 */
+        flex-basis: auto; 
         width: 100%;
     }
 
     .controls {
         flex-basis: auto; 
         gap: 5px; 
-        align-self: center; /* 💡 中央寄せ */
+        align-self: center; 
     }
 
     .control-btn {

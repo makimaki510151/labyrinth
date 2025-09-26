@@ -127,7 +127,7 @@ class GameState {
 /**
  * 指定されたレベル番号に対応する迷路画像ファイル名を取得
  * @param {number} level 
- * @returns {string} ファイルパス
+ * @returns {object} { filename: string } 
  */
 function getMazeConfig(level) {
     // 1.png, 2.png, ... という連番のファイルを想定
@@ -297,10 +297,8 @@ class MazeGame {
         this.player = null;
         this.canvas = null;
         this.ctx = null;
-        this.minimapCanvas = null;
-        this.minimapCtx = null;
+        // 💡 削除: ミニマップ関連のプロパティを削除
         this.cellSize = 25;
-        this.minimapCellSize = 8;
         this.parsedMazes = {};
         
         // 💡 追加: 長押し移動のためのタイマー
@@ -704,16 +702,18 @@ class MazeGame {
 
             this.canvas = document.getElementById('maze-canvas');
             this.ctx = this.canvas.getContext('2d');
-            this.minimapCanvas = document.getElementById('minimap-canvas');
-            this.minimapCtx = this.minimapCanvas.getContext('2d');
+            // 💡 削除: ミニマップ関連のプロパティを初期化から削除
+            // this.minimapCanvas = document.getElementById('minimap-canvas');
+            // this.minimapCtx = this.minimapCanvas.getContext('2d');
 
             this.cellSize = Math.min(400 / this.maze.width, 400 / this.maze.height);
             this.canvas.width = this.maze.width * this.cellSize;
             this.canvas.height = this.maze.height * this.cellSize;
 
-            this.minimapCellSize = Math.min(150 / this.maze.width, 150 / this.maze.height);
-            this.minimapCanvas.width = this.maze.width * this.minimapCellSize;
-            this.minimapCanvas.height = this.maze.height * this.minimapCellSize;
+            // 💡 削除: ミニマップ関連のサイズ計算を削除
+            // this.minimapCellSize = Math.min(150 / this.maze.width, 150 / this.maze.height);
+            // this.minimapCanvas.width = this.maze.width * this.minimapCellSize;
+            // this.minimapCanvas.height = this.maze.height * this.minimapCellSize;
 
             document.getElementById('current-level').textContent = `レベル ${level}`;
 
@@ -815,7 +815,8 @@ class MazeGame {
 
     render() {
         this.renderMaze();
-        this.renderMinimap();
+        // 💡 削除: renderMinimapの呼び出しを削除
+        // this.renderMinimap(); 
     }
 
     renderMaze() {
@@ -870,48 +871,9 @@ class MazeGame {
     }
 
     /**
-     * ミニマップの描画: 通った跡が残ります
+     * 💡 削除: ミニマップの描画関数を削除
      */
-    renderMinimap() {
-        const ctx = this.minimapCtx;
-        const canvas = this.minimapCanvas;
-
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-        for (let y = 0; y < this.maze.height; y++) {
-            for (let x = 0; x < this.maze.width; x++) {
-                // 💡 訪問済みのセルのみ描画 (通った跡)
-                if (this.player.hasVisited(x, y)) {
-                    const drawX = x * this.minimapCellSize;
-                    const drawY = y * this.minimapCellSize;
-
-                    // 壁の色（通った道にある壁）
-                    if (this.maze.isWall(x, y)) {
-                        ctx.fillStyle = '#333';
-                    } else {
-                        // 通路の色 (通った跡の色)
-                        ctx.fillStyle = '#fff';
-                    }
-                    ctx.fillRect(drawX, drawY, this.minimapCellSize, this.minimapCellSize);
-
-                    // スタート/ゴールも通った跡として表示
-                    if (x === this.maze.goal.x && y === this.maze.goal.y) {
-                        ctx.fillStyle = '#F44336';
-                        ctx.fillRect(drawX, drawY, this.minimapCellSize, this.minimapCellSize);
-                    } else if (x === this.maze.start.x && y === this.maze.start.y) {
-                        ctx.fillStyle = '#0000FF';
-                        ctx.fillRect(drawX, drawY, this.minimapCellSize, this.minimapCellSize);
-                    }
-                }
-            }
-        }
-
-        // プレイヤー位置を上書き
-        const playerX = this.player.x * this.minimapCellSize;
-        const playerY = this.player.y * this.minimapCellSize;
-        ctx.fillStyle = '#4CAF50';
-        ctx.fillRect(playerX, playerY, this.minimapCellSize, this.minimapCellSize);
-    }
+    // renderMinimap() { ... }
 }
 
 // ゲーム開始
