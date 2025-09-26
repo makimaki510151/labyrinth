@@ -66,9 +66,15 @@ function playSound(type) {
 class GameState {
     constructor() {
         this.currentLevel = 1;
-        this.maxLevel = 11; // 総レベル数
+        // 💡 変更: 初期値は0とし、後にMazeGame.initで動的に設定される
+        this.maxLevel = 0; 
         this.progress = this.loadProgress();
         this.currentScreen = 'title';
+    }
+    
+    // 💡 追加: maxLevelを設定するメソッド
+    setMaxLevel(level) {
+        this.maxLevel = level;
     }
 
     // 保存データを読み込む
@@ -117,21 +123,16 @@ class GameState {
     }
 }
 
-// 迷路データ設定 (画像ファイル名と色定義)
-const MAZE_CONFIG = {
-    // ユーザー様がアップロードされた画像をレベル1として仮設定
-    1: { filename: 'maps/1.png' },
-    2: { filename: 'maps/2.png' },
-    3: { filename: 'maps/3.png' },
-    4: { filename: 'maps/4.png' },
-    5: { filename: 'maps/5.png' },
-    6: { filename: 'maps/6.png' },
-    7: { filename: 'maps/7.png' },
-    8: { filename: 'maps/8.png' },
-    9: { filename: 'maps/9.png' },
-    10: { filename: 'maps/10.png' },
-    11: { filename: 'maps/11.png' },
-};
+// 💡 変更: MAZE_CONFIGを削除し、代わりにファイル名を返す関数を定義
+/**
+ * 指定されたレベル番号に対応する迷路画像ファイル名を取得
+ * @param {number} level 
+ * @returns {string} ファイルパス
+ */
+function getMazeConfig(level) {
+    // 1.png, 2.png, ... という連番のファイルを想定
+    return { filename: `maps/${level}.png` };
+}
 
 // 迷路解析のためのカラーコード定数 (RGB形式)
 const COLOR_MAP = {
@@ -196,7 +197,8 @@ function parseMazeFromImage(imageUrl) {
                 }
 
                 if (!start || !goal) {
-                    throw new Error('迷路のスタート(青: 0,0,255)またはゴール(赤: 255,0,0)が見つかりませんでした。画像を確認してください。');
+                    // 💡 エラーメッセージをより詳細に
+                    throw new Error(`迷路画像 ${imageUrl} のスタート(青: 0,0,255)またはゴール(赤: 255,0,0)が見つかりませんでした。`);
                 }
 
                 resolve({
@@ -214,7 +216,8 @@ function parseMazeFromImage(imageUrl) {
         };
 
         img.onerror = function () {
-            reject(new Error(`迷路画像を読み込めませんでした: ${imageUrl}`));
+            // 💡 404エラーなどで画像が読み込めなかった場合もreject
+            reject(new Error(`迷路画像 ${imageUrl} を読み込めませんでした。ファイルが存在しないか、パスが間違っています。`));
         };
 
         img.src = imageUrl;
@@ -307,10 +310,41 @@ class MazeGame {
         this.init();
     }
 
-    init() {
+    // 💡 変更: initをasyncにし、最大レベルを動的に設定する処理を追加
+    async init() {
+        await this.determineMaxLevel(); // 💡 追加: 最大レベルを決定
         this.setupEventListeners();
         this.initAudio(); // 💡 追加: オーディオコンテキストの初期化
         this.showScreen('title');
+    }
+
+    /**
+     * 💡 新規追加: mapsフォルダ内の連番ファイル数を検知し、最大レベルを設定
+     */
+    async determineMaxLevel() {
+        const MAX_CHECK_LIMIT = 99; // 念のためチェックの上限を設定
+        let maxLevel = 0;
+        
+        // 1から順番にファイルが存在するかチェック
+        for (let i = 1; i <= MAX_CHECK_LIMIT; i++) {
+            const config = getMazeConfig(i);
+            try {
+                // parseMazeFromImageは画像ロード失敗時にrejectを返す
+                // 画像データはキャッシュに保存するだけで、ここでは描画しない
+                this.parsedMazes[i] = await parseMazeFromImage(config.filename);
+                maxLevel = i;
+            } catch (error) {
+                // 💡 読み込みに失敗した場合、そこで連番が途切れたと判断して終了
+                break;
+            }
+        }
+        
+        this.gameState.setMaxLevel(maxLevel);
+        console.log(`検知された最大レベル数: ${maxLevel}`);
+        
+        if (maxLevel === 0) {
+            console.error("マップファイル(maps/1.png, maps/2.png...)が一つも見つかりませんでした。");
+        }
     }
 
     // 💡 修正・拡張: オーディオコンテキストとマスターゲインノードの初期化
@@ -479,14 +513,14 @@ class MazeGame {
                 focusedButton.click();
             }
         // 上/下矢印キーでフォーカス移動
-        } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
             e.preventDefault(); // 画面スクロールを防ぐ
             
             let nextIndex = currentIndex;
 
-            if (e.key === 'ArrowLeft') {
+            if (e.key === 'ArrowDown') {
                 nextIndex = (currentIndex + 1) % buttons.length;
-            } else if (e.key === 'ArrowRight') {
+            } else if (e.key === 'ArrowUp') {
                 nextIndex = (currentIndex - 1 + buttons.length) % buttons.length;
             }
 
@@ -543,9 +577,6 @@ class MazeGame {
             // レベル選択画面では最初のアンロックされたボタンにフォーカスを当てるのが理想だが、
             // シンプルに「タイトルに戻る」ボタンにフォーカスを当てておく
             document.getElementById('back-to-title').focus();
-        } else if (screenName === 'clear') {
-            // クリア画面では次に進むボタンにフォーカスを当てる (completeLevelで処理)
-            // ここでは何もしない
         } else {
             // ゲーム画面など、その他の画面ではフォーカスを解除
             document.activeElement.blur();
@@ -553,6 +584,12 @@ class MazeGame {
     }
 
     showLevelSelect() {
+        // 💡 追加: レベルが一つもない場合はエラーメッセージ
+        if (this.gameState.maxLevel === 0) {
+            alert("マップファイルが見つかりません。レベル1.pngをmapsフォルダに配置してください。");
+            return;
+        }
+
         this.showScreen('level-select');
         this.updateLevelGrid();
     }
@@ -571,6 +608,7 @@ class MazeGame {
 
             if (this.gameState.isLevelCompleted(i)) {
                 button.classList.add('completed');
+                // 💡 変更: すでにparsedMazesにデータがあることを前提とする
                 this.addLevelPreview(button, i);
             } else if (this.gameState.isLevelUnlocked(i)) {
                 button.classList.add('available');
@@ -595,9 +633,14 @@ class MazeGame {
 
         if (this.gameState.isLevelCompleted(level)) {
             try {
-                const config = MAZE_CONFIG[level];
-                const mazeData = this.parsedMazes[level] || await parseMazeFromImage(config.filename);
-                this.parsedMazes[level] = mazeData;
+                // 💡 変更: determineMaxLevelで既に読み込み済み（parsedMazesにキャッシュ済み）のデータを使用
+                const mazeData = this.parsedMazes[level]; 
+                
+                // データがない場合は再読み込み（基本的には不要だが安全のため）
+                if (!mazeData) {
+                    const config = getMazeConfig(level);
+                    this.parsedMazes[level] = await parseMazeFromImage(config.filename);
+                }
 
                 const ctx = mapCanvas.getContext('2d');
                 const pathSet = this.gameState.getCompletedPath(level);
@@ -638,8 +681,8 @@ class MazeGame {
     }
 
     async startLevel(level) {
-        const config = MAZE_CONFIG[level];
-        if (!config) {
+        const config = getMazeConfig(level);
+        if (level > this.gameState.maxLevel || !config) {
             alert('このレベルはまだ実装されていません。');
             return;
         }
@@ -647,8 +690,14 @@ class MazeGame {
         this.gameState.currentLevel = level;
 
         try {
-            const mazeData = this.parsedMazes[level] || await parseMazeFromImage(config.filename);
-            this.parsedMazes[level] = mazeData;
+            // 💡 変更: determineMaxLevelで既に読み込み済み（parsedMazesにキャッシュ済み）のデータを使用
+            let mazeData = this.parsedMazes[level]; 
+
+            // データがキャッシュにない場合は読み込み（初めてのレベルの場合や、エラー処理）
+            if (!mazeData) {
+                mazeData = await parseMazeFromImage(config.filename);
+                this.parsedMazes[level] = mazeData;
+            }
 
             this.maze = new Maze(mazeData);
             this.player = new Player(this.maze.start.x, this.maze.start.y);
@@ -678,11 +727,7 @@ class MazeGame {
         }
     }
 
-    // 💡 変更: handleKeyPressから名称変更し、handleClearScreenKeyPressと分離
     // WASD/矢印キーによる移動処理
-    // (中略 - 関数全体は省略、外部呼び出し側と移動ロジックは変更なし)
-    
-    // handleKeyPress -> handleGameKeyPressに名称変更し、他のキーロジックと分離
     handleGameKeyPress(key) {
         let dx = 0, dy = 0;
 
@@ -747,7 +792,7 @@ class MazeGame {
         this.gameState.completeLevel(this.gameState.currentLevel, this.player.visitedCells);
 
         const nextLevel = this.gameState.currentLevel + 1;
-        const hasNextLevel = nextLevel <= this.gameState.maxLevel;
+        const hasNextLevel = nextLevel <= this.gameState.maxLevel; // 💡 変更: maxLevelは動的に設定されている
 
         document.getElementById('clear-message').textContent =
             hasNextLevel ? 'おめでとうございます！次のレベルに挑戦しましょう！' : 'すべてのレベルをクリアしました！';
@@ -871,5 +916,6 @@ class MazeGame {
 
 // ゲーム開始
 document.addEventListener('DOMContentLoaded', () => {
+    // 💡 変更: MazeGameの初期化が非同期になったため、DOMContentLoadedでインスタンスを作成し、initを呼び出す
     window.game = new MazeGame();
 });
