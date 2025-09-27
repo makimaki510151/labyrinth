@@ -5,10 +5,14 @@
 }
 
 body {
-    font-family: 'Arial', sans-serif;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    /* ... その他のスタイル ... */
+
+    /* 修正1: 100vhの問題を解決するため、dvhを追加 */
     min-height: 100vh;
+    min-height: 100dvh;
+
     display: flex;
+    /* 垂直方向のセンタリングは維持 (全体を中央に配置する役割のため) */
     align-items: center;
     justify-content: center;
 }
@@ -16,10 +20,20 @@ body {
 .screen {
     display: none;
     width: 100%;
+    /* 修正1: 100vhの問題を解決するため、dvhを追加 */
     height: 100vh;
-    align-items: center;
+    height: 100dvh;
+
+    /* 修正2: 垂直方向のセンタリングを解除し、コンテンツを上端に固定 */
+    /* これが「上の方が見えなくなる」問題の主な解決策です */
+    align-items: flex-start;
+    /* 'center' から 'flex-start' に変更 */
+
     justify-content: center;
     padding: 20px;
+
+    /* 修正3: コンテンツが画面の高さより大きい場合にスクロールを許可 */
+    overflow-y: auto;
 }
 
 .screen.active {
@@ -129,7 +143,7 @@ body {
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
     display: flex;
     flex-direction: column;
-    max-width: 750px; 
+    max-width: 750px;
     width: 100%;
 }
 
@@ -162,7 +176,7 @@ body {
     /* 修正: 迷路表示エリアの最大サイズを固定 */
     max-width: 500px;
     max-height: 500px;
-    overflow: hidden; 
+    overflow: hidden;
 }
 
 .game-sidebar {
@@ -189,7 +203,8 @@ body {
 
 #minimap-canvas {
     border: 1px solid #333;
-    display: block; /* センター寄せのため */
+    display: block;
+    /* センター寄せのため */
     margin: 0 auto;
 }
 
@@ -314,7 +329,7 @@ body {
     }
 
     .volume-control {
-        flex-basis: auto; 
+        flex-basis: auto;
         width: 100%;
     }
 
@@ -322,11 +337,11 @@ body {
     .minimap-container {
         width: 100%;
     }
-    
+
     .controls {
-        flex-basis: auto; 
-        gap: 5px; 
-        align-self: center; 
+        flex-basis: auto;
+        gap: 5px;
+        align-self: center;
     }
 
     .control-btn {
@@ -338,5 +353,23 @@ body {
     .game-container {
         max-width: 100%;
         padding: 10px;
+        /* 修正: ゲームコンテナ全体が画面の高さを超えた場合にスクロール可能にする */
+        max-height: calc(100dvh - 40px);
+        /* .screen のpadding (上下20px*2=40px)を引く */
+        overflow-y: auto;
+    }
+
+    /* 追加: 迷路コンテナを画面幅いっぱいに使うように調整 */
+    .maze-container {
+        /* max-width: 500px; を無効化し、100%幅に */
+        max-width: 100%;
+    }
+
+    /* 修正: キャンバスを親要素 (.maze-container) の幅いっぱいに広げる */
+    /* script.jsで設定されているwidth/height属性をCSSで上書きし、縮小させる */
+    #maze-canvas {
+        width: 100% !important;
+        height: auto !important;
+        /* アスペクト比を維持 */
     }
 }
