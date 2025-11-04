@@ -313,7 +313,7 @@ class MazeGame {
 
         // 💡 追加: 長押し移動のためのタイマー
         this.moveTimer = null;
-        this.moveInterval = 100; // 連続移動の間隔 (ms)
+        this.moveInterval = 200; // 連続移動の間隔 (ms)
 
         // 💡 追加: ジョイスティックの状態
         this.joystick = {
