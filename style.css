@@ -234,32 +234,10 @@ body {
 .controls {
     text-align: center;
     /* 💡 変更: デフォルト（デスクトップ）では非表示にする */
-    display: none;
+    display: none; 
     flex-direction: column;
     align-items: center;
     gap: 10px;
-}
-
-.control-row {
-    display: flex;
-    justify-content: center;
-    gap: 5px;
-}
-
-.control-btn {
-    width: 50px;
-    height: 50px;
-    font-size: 1.5rem;
-    border: 2px solid #333;
-    border-radius: 8px;
-    background-color: #ddd;
-    cursor: pointer;
-    transition: background-color 0.1s;
-    touch-action: manipulation;
-}
-
-.control-btn:active {
-    background-color: #bbb;
 }
 
 /* 💡 新規追加: ジョイスティックのスタイル */
@@ -267,21 +245,18 @@ body {
     /* 中央に配置するためのコンテナ */
     width: 150px;
     height: 150px;
-    display: none;
-    /* デフォルトでは非表示 */
+    display: none; /* デフォルトでは非表示 */
     justify-content: center;
     align-items: center;
     margin: 10px auto;
-    touch-action: none;
-    /* タッチスクロールなどのブラウザ操作を無効化 */
+    touch-action: none; /* タッチスクロールなどのブラウザ操作を無効化 */
 }
 
 #joystick-base {
     width: 100%;
     height: 100%;
     border-radius: 50%;
-    background: rgba(100, 100, 100, 0.4);
-    /* 半透明のベース */
+    background: rgba(100, 100, 100, 0.4); /* 半透明のベース */
     border: 2px solid #666;
     position: relative;
 }
@@ -380,22 +355,15 @@ body {
     /* コントロールを上書きして、ジョイスティックを表示 */
     .controls {
         /* 💡 変更: モバイルではflexで表示 */
-        display: flex;
+        display: flex; 
         flex-basis: auto;
         gap: 5px;
         align-self: center;
     }
-
+    
     #joystick-container {
         /* 💡 変更: モバイルでのみジョイスティックを表示 */
-        display: flex;
-    }
-
-    /* control-btn は HTML から削除したため無効 */
-    .control-btn {
-        width: 70px;
-        height: 70px;
-        font-size: 2.5rem;
+        display: flex; 
     }
 
     .game-container {
