@@ -147,7 +147,7 @@ const COLOR_MAP = {
 };
 
 /**
- * 迷路画像を解析し、迷路データオブジェクトを生成する関数
+ * 迷路画像を解析し、迷路データオブジェクトを生成する非同期関数
  * @param {string} imageUrl 迷路画像のURL ('maps/mazeX.png'など)
  * @returns {Promise<object>} { width, height, start, goal, walls } を含むPromise
  */
@@ -187,6 +187,8 @@ function parseMazeFromImage(imageUrl) {
                         const g = data[i + 1];
                         const b = data[i + 2];
 
+                        // 💡 許容範囲を持たせるため、完全一致ではなく近似値で判定するのが望ましいが、
+                        // 既存のコードを維持するため、RGB完全一致で判定
                         const colorKey = `${r},${g},${b}`;
 
                         if (colorKey === COLOR_MAP.WALL) {
@@ -252,6 +254,11 @@ class Player {
         const newX = this.x + dx;
         const newY = this.y + dy;
 
+        // 境界チェック
+        if (newX < 0 || newX >= maze.width || newY < 0 || newY >= maze.height) {
+            return false;
+        }
+
         if (!maze.isWall(newX, newY)) {
             this.x = newX;
             this.y = newY;
@@ -304,40 +311,54 @@ class MazeGame {
         this.minimapCanvas = null; // 💡 追加: ミニマップCanvas
         this.minimapCtx = null; // 💡 追加: ミニマップCtx
         this.cellSize = 25;
-        this.parsedMazes = {};
+        this.parsedMazes = {}; // 💡 保持: 一度読み込んだマップをキャッシュ
 
         // 💡 追加: 長押し移動のためのタイマー
         this.moveTimer = null;
         this.moveInterval = 100; // 連続移動の間隔 (ms)
+
+        // 💡 追加: ジョイスティックの状態
+        this.joystick = {
+            active: false,
+            direction: { dx: 0, dy: 0 }
+        };
 
         this.init();
     }
 
     // 💡 変更: initをasyncにし、最大レベルを動的に設定する処理を追加
     async init() {
-        await this.determineMaxLevel(); // 💡 追加: 最大レベルを決定
+        await this.determineMaxLevel(); // 💡 変更: 最大レベルを決定
         this.setupEventListeners();
+        this.setupJoystick(); // 💡 追加: ジョイスティックのセットアップ
         this.initAudio(); // 💡 追加: オーディオコンテキストの初期化
         this.showScreen('title');
     }
 
     /**
-     * 💡 新規追加: mapsフォルダ内の連番ファイル数を検知し、最大レベルを設定
+     * 💡 変更: mapsフォルダ内の連番ファイル数を検知し、最大レベルを設定（画像データは読み込まない）
      */
     async determineMaxLevel() {
         const MAX_CHECK_LIMIT = 99; // 念のためチェックの上限を設定
         let maxLevel = 0;
 
-        // 1から順番にファイルが存在するかチェック
         for (let i = 1; i <= MAX_CHECK_LIMIT; i++) {
             const config = getMazeConfig(i);
             try {
-                // parseMazeFromImageは画像ロード失敗時にrejectを返す
-                // 画像データはキャッシュに保存するだけで、ここでは描画しない
-                this.parsedMazes[i] = await parseMazeFromImage(config.filename);
+                // 💡 変更: 実際のパース処理ではなく、画像の存在チェックのみを行う
+                const img = new Image();
+                img.crossOrigin = 'Anonymous';
+
+                const loadPromise = new Promise((resolve, reject) => {
+                    img.onload = () => resolve(true);
+                    img.onerror = () => reject(new Error('Load failed'));
+                    img.src = config.filename;
+                });
+
+                await loadPromise;
                 maxLevel = i;
             } catch (error) {
-                // 💡 読み込みに失敗した場合、そこで連番が途切れたと判断して終了
+                // 読み込みに失敗した場合、そこで連番が途切れたと判断して終了
                 break;
             }
         }
@@ -348,7 +369,29 @@ class MazeGame {
         if (maxLevel === 0) {
             console.error("マップファイル(maps/1.png, maps/2.png...)が一つも見つかりませんでした。");
         }
+
+        // 💡 追加: レベル1は常に最初に読み込みを試みる (preloadMazeDataは非同期で実行されるため、awaitは不要)
+        this.preloadMazeData(1);
     }
+
+    /**
+     * 💡 新規追加: 指定されたレベルの迷路データを非同期で読み込み、キャッシュする
+     * @param {number} level 
+     */
+    async preloadMazeData(level) {
+        if (level > this.gameState.maxLevel || this.parsedMazes[level]) return; // 存在しないか、既にキャッシュされている場合はスキップ
+
+        const config = getMazeConfig(level);
+        try {
+            // 💡 変更: 実際のパース処理を非同期で実行し、結果をキャッシュ
+            this.parsedMazes[level] = await parseMazeFromImage(config.filename);
+            console.log(`レベル ${level} のマップデータがバックグラウンドで読み込まれました。`);
+        } catch (error) {
+            // 読み込みに失敗しても、ゲームプレイをブロックしない
+            console.warn(`レベル ${level} のマップデータ読み込みに失敗しました:`, error.message || error);
+        }
+    }
+
 
     // 💡 修正・拡張: オーディオコンテキストとマスターゲインノードの初期化
     initAudio() {
@@ -435,59 +478,192 @@ class MazeGame {
             }
         });
 
-        // モバイルコントロール
-        const controlButtons = {
-            'up-btn': { dx: 0, dy: -1 },
-            'down-btn': { dx: 0, dy: 1 },
-            'left-btn': { dx: -1, dy: 0 },
-            'right-btn': { dx: 1, dy: 0 }
-        };
-
-        Object.keys(controlButtons).forEach(id => {
-            const btn = document.getElementById(id);
-            const { dx, dy } = controlButtons[id];
-
-            // 💡 追加: 長押し処理の開始
-            const startMove = (e) => {
-                e.preventDefault(); // モバイルでの誤操作防止
-                if (this.gameState.currentScreen !== 'game') return;
-
-                // 既にタイマーがある場合はスキップ
-                if (this.moveTimer) return;
-
-                // 最初の移動を実行
-                this.movePlayer(dx, dy);
-
-                // 連続移動タイマーを設定
-                this.moveTimer = setInterval(() => {
-                    this.movePlayer(dx, dy);
-                }, this.moveInterval);
-            };
-
-            // 💡 追加: 長押し処理の停止
-            const stopMove = () => {
-                if (this.moveTimer) {
-                    clearInterval(this.moveTimer);
-                    this.moveTimer = null;
-                }
-            };
-
-            // マウスイベント
-            btn.addEventListener('mousedown', startMove);
-            btn.addEventListener('mouseup', stopMove);
-            btn.addEventListener('mouseleave', stopMove); // ボタン外でリリースした場合も停止
-
-            // タッチイベント (モバイル対応)
-            btn.addEventListener('touchstart', startMove, { passive: false }); // passive: false で preventDefault() を有効にする
-            btn.addEventListener('touchend', stopMove);
-            btn.addEventListener('touchcancel', stopMove);
-        });
+        // 💡 削除: 従来のモバイルコントロールボタンのイベントリスナーを削除
 
         // 💡 追加: クリア画面のキーボードナビゲーションを初期設定
         this.setupClearScreenKeyNavigation();
     }
 
-    // 💡 追加: クリア画面のキーボードナビゲーションのためのヘルパー関数
+    /**
+     * 💡 新規追加: ジョイスティックのタッチ/マウスイベントを設定
+     */
+    setupJoystick() {
+        const base = document.getElementById('joystick-base');
+        const handle = document.getElementById('joystick-handle');
+        const container = document.getElementById('joystick-container');
+
+        if (!base || !handle || !container) return; // 要素がない場合はスキップ
+
+        // コンテナのサイズを動的に取得
+        let containerRect = container.getBoundingClientRect();
+
+        // コンテナの中心座標
+        const centerX = containerRect.width / 2;
+        const centerY = containerRect.height / 2;
+        // ハンドルの最大移動距離（ベースの半径）
+        const maxDist = (containerRect.width / 2) - (handle.offsetWidth / 2); // ベース半径 - ハンドル半径
+
+        // 💡 連続移動のためのタイマー処理を管理する関数
+        const startContinuousMove = () => {
+            if (this.moveTimer) return; // 既に実行中の場合は何もしない
+
+            // 最初の移動を実行
+            this.movePlayer(this.joystick.direction.dx, this.joystick.direction.dy);
+
+            // 連続移動タイマーを設定
+            this.moveTimer = setInterval(() => {
+                this.movePlayer(this.joystick.direction.dx, this.joystick.direction.dy);
+            }, this.moveInterval);
+        };
+
+        // 💡 連続移動のためのタイマー処理を停止する関数
+        const stopContinuousMove = () => {
+            if (this.moveTimer) {
+                clearInterval(this.moveTimer);
+                this.moveTimer = null;
+            }
+        };
+
+        const handleMove = (clientX, clientY) => {
+            // 💡 ジョイスティックコンテナに対する相対位置を計算
+            containerRect = container.getBoundingClientRect(); // 位置が変わりうるため毎回再取得
+            const x = clientX - containerRect.left - centerX;
+            const y = clientY - containerRect.top - centerY;
+            const distance = Math.sqrt(x * x + y * y);
+
+            let normalizedX = x;
+            let normalizedY = y;
+            let currentDist = distance;
+
+            // 💡 ハンドルがベースからはみ出さないようにクランプ
+            if (distance > maxDist) {
+                const angle = Math.atan2(y, x);
+                normalizedX = maxDist * Math.cos(angle);
+                normalizedY = maxDist * Math.sin(angle);
+                currentDist = maxDist;
+            }
+
+            // 💡 ハンドルの位置を更新 (中心からの移動量として適用)
+            handle.style.transform = `translate(${normalizedX}px, ${normalizedY}px)`;
+
+
+            // 💡 移動方向を計算（4方向を想定。斜め移動は無効化）
+            let dx = 0;
+            let dy = 0;
+            const threshold = maxDist * 0.4; // 閾値を最大移動距離の40%に設定
+
+            if (currentDist > threshold) {
+                const absX = Math.abs(normalizedX);
+                const absY = Math.abs(normalizedY);
+
+                if (absX > absY) {
+                    // X軸方向の判断
+                    dx = normalizedX > 0 ? 1 : -1;
+                    dy = 0;
+                } else {
+                    // Y軸方向の判断
+                    dx = 0;
+                    dy = normalizedY > 0 ? 1 : -1;
+                }
+            }
+
+
+            // 💡 方向が変更されたか、または移動が開始された場合
+            if (dx !== this.joystick.direction.dx || dy !== this.joystick.direction.dy || !this.joystick.active) {
+                // 古いタイマーを停止
+                stopContinuousMove();
+
+                this.joystick.direction = { dx, dy };
+                this.joystick.active = true;
+
+                // 新しい方向でタイマーを開始
+                if (dx !== 0 || dy !== 0) {
+                    startContinuousMove();
+                }
+            } else if (dx === 0 && dy === 0 && this.joystick.active) {
+                // 閾値以下に戻った場合は移動を停止
+                this.joystick.active = false;
+                stopContinuousMove();
+            }
+        };
+
+        // 💡 終了処理（指を離した/マウスを離した時）
+        const endMove = () => {
+            this.joystick.active = false;
+            this.joystick.direction = { dx: 0, dy: 0 };
+            stopContinuousMove();
+
+            // ハンドルを中央に戻す
+            handle.style.transform = 'translate(-50%, -50%)';
+
+            // リスナーを削除
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+            document.removeEventListener('touchmove', onTouchMove);
+            document.removeEventListener('touchend', onTouchEnd);
+            document.removeEventListener('touchcancel', onTouchEnd);
+        };
+
+        // 💡 実際のマウス/タッチイベントハンドラー
+        const onMouseMove = (e) => {
+            if (this.gameState.currentScreen === 'game') {
+                handleMove(e.clientX, e.clientY);
+            }
+        };
+        const onMouseUp = (e) => {
+            endMove();
+        };
+
+        const onTouchMove = (e) => {
+            if (this.gameState.currentScreen === 'game' && e.touches.length === 1) {
+                // スクロールを防止し、ジョイスティック操作に専念させる
+                e.preventDefault();
+                handleMove(e.touches[0].clientX, e.touches[0].clientY);
+            }
+        };
+        const onTouchEnd = (e) => {
+            // 複数の指で操作している場合は、最後の指が離れた時のみ終了させる
+            if (e.touches.length === 0) {
+                endMove();
+            }
+        };
+
+        // 💡 開始処理 (mousedown/touchstart)
+        const startMove = (clientX, clientY) => {
+            if (this.gameState.currentScreen !== 'game') return;
+
+            // 移動/終了リスナーを設定
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+            document.addEventListener('touchmove', onTouchMove, { passive: false });
+            document.addEventListener('touchend', onTouchEnd);
+            document.addEventListener('touchcancel', onTouchEnd);
+
+            // 初回の位置計算と移動開始
+            handleMove(clientX, clientY);
+        };
+
+        // イベントリスナーをハンドルに追加
+        handle.addEventListener('mousedown', (e) => {
+            e.preventDefault(); // ドラッグ選択を防止
+            startMove(e.clientX, e.clientY);
+        });
+        // 💡 コンテナ全体をタッチエリアとする
+        container.addEventListener('touchstart', (e) => {
+            e.preventDefault(); // デフォルトのタッチ操作を防止
+            if (e.touches.length === 1) {
+                startMove(e.touches[0].clientX, e.touches[0].clientY);
+            }
+        }, { passive: false });
+
+        // リサイズ時などにジョイスティックの中心座標を再計算
+        window.addEventListener('resize', () => {
+            if (container) {
+                containerRect = container.getBoundingClientRect();
+            }
+        });
+    }
+
     setupClearScreenKeyNavigation() {
         // ボタンを配列として取得
         this.clearScreenButtons = [
@@ -534,7 +710,6 @@ class MazeGame {
 
             buttons[nextIndex].focus();
         }
-        // Tabキーによる移動はブラウザのデフォルトに任せる (tabindexを設定済み)
     }
 
     // 💡 修正: ゲーム画面のキーボード操作を処理するハンドラーとして独立させる
@@ -577,12 +752,10 @@ class MazeGame {
         if (screenName === 'title') {
             document.getElementById('start-button').focus();
         } else if (screenName === 'level-select') {
-            // レベル選択画面では最初のアンロックされたボタンにフォーカスを当てるのが理想だが、
-            // シンプルに「タイトルに戻る」ボタンにフォーカスを当てておく
             document.getElementById('back-to-title').focus();
         } else {
             // ゲーム画面など、その他の画面ではフォーカスを解除
-            document.activeElement.blur();
+            if (document.activeElement) document.activeElement.blur();
         }
     }
 
@@ -600,6 +773,7 @@ class MazeGame {
     updateLevelGrid() {
         const grid = document.getElementById('level-grid');
         grid.innerHTML = '';
+        let firstUnlocked = null; // 💡 追加: 最初にアンロックされたレベル
 
         for (let i = 1; i <= this.gameState.maxLevel; i++) {
             const button = document.createElement('button');
@@ -611,10 +785,12 @@ class MazeGame {
 
             if (this.gameState.isLevelCompleted(i)) {
                 button.classList.add('completed');
-                // 💡 変更: すでにparsedMazesにデータがあることを前提とする
                 this.addLevelPreview(button, i);
             } else if (this.gameState.isLevelUnlocked(i)) {
                 button.classList.add('available');
+                if (!firstUnlocked) {
+                    firstUnlocked = i; // 💡 最初のアンロックされたレベルを特定
+                }
             } else {
                 button.classList.add('locked');
             }
@@ -624,6 +800,11 @@ class MazeGame {
             }
 
             grid.appendChild(button);
+        }
+
+        // 💡 追加: 最初にプレイする可能性が高いレベルをバックグラウンドで読み込む
+        if (firstUnlocked) {
+            this.preloadMazeData(firstUnlocked);
         }
     }
 
@@ -636,13 +817,14 @@ class MazeGame {
 
         if (this.gameState.isLevelCompleted(level)) {
             try {
-                // 💡 変更: determineMaxLevelで既に読み込み済み（parsedMazesにキャッシュ済み）のデータを使用
-                const mazeData = this.parsedMazes[level];
+                // 💡 変更: キャッシュ済み（preloadMazeDataで読み込まれているはず）または、非同期で読み込み
+                let mazeData = this.parsedMazes[level];
 
-                // データがない場合は再読み込み（基本的には不要だが安全のため）
+                // データがない場合は同期的に読み込みを待つ
                 if (!mazeData) {
                     const config = getMazeConfig(level);
-                    this.parsedMazes[level] = await parseMazeFromImage(config.filename);
+                    mazeData = await parseMazeFromImage(config.filename);
+                    this.parsedMazes[level] = mazeData;
                 }
 
                 const ctx = mapCanvas.getContext('2d');
@@ -690,12 +872,19 @@ class MazeGame {
             return;
         }
 
+        if (!this.gameState.isLevelUnlocked(level)) {
+            alert("このレベルはまだアンロックされていません。");
+            return;
+        }
+
         this.gameState.currentLevel = level;
 
         try {
             let mazeData = this.parsedMazes[level];
 
             if (!mazeData) {
+                // 💡 変更: キャッシュがない場合、同期的に読み込みを待つ
+                const config = getMazeConfig(level);
                 mazeData = await parseMazeFromImage(config.filename);
                 this.parsedMazes[level] = mazeData;
             }
@@ -736,39 +925,14 @@ class MazeGame {
             this.showScreen('game');
             this.render();
 
+            // 💡 追加: プレイ開始後、次のレベルをバックグラウンドで読み込む
+            this.preloadMazeData(level + 1);
+
         } catch (error) {
             alert(`レベル ${level} の読み込みに失敗しました。\nエラー: ${error.message || error}`);
             console.error(error);
             this.showLevelSelect();
         }
-    }
-
-    // WASD/矢印キーによる移動処理
-    handleGameKeyPress(key) {
-        let dx = 0, dy = 0;
-
-        switch (key.toLowerCase()) {
-            case 'w':
-            case 'arrowup':
-                dy = -1;
-                break;
-            case 's':
-            case 'arrowdown':
-                dy = 1;
-                break;
-            case 'a':
-            case 'arrowleft':
-                dx = -1;
-                break;
-            case 'd':
-            case 'arrowright':
-                dx = 1;
-                break;
-            default:
-                return;
-        }
-
-        this.movePlayer(dx, dy);
     }
 
     movePlayer(dx, dy) {
@@ -793,7 +957,7 @@ class MazeGame {
             // 壁に衝突した場合
             const newX = this.player.x + dx;
             const newY = this.player.y + dy;
-            if (this.maze.isWall(newX, newY)) {
+            if (this.maze.isWall(newX, newY) || newX < 0 || newX >= this.maze.width || newY < 0 || newY >= this.maze.height) {
                 playSound('hit'); // 💡 壁衝突音
             }
         }
