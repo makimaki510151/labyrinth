@@ -126,6 +126,15 @@ class GameState {
     isLevelCompleted(level) {
         return this.progress[level] && this.progress[level].completed;
     }
+
+    /** クリア済みの最大ステージ番号 (ランダム難易度の上限)。未クリアなら 0 */
+    getMaxClearedStage() {
+        let max = 0;
+        for (let i = 1; i <= this.maxLevel; i++) {
+            if (this.isLevelCompleted(i)) max = i;
+        }
+        return max;
+    }
 }
 
 /**
@@ -136,6 +145,115 @@ class GameState {
 function getMazeConfig(level) {
     // 1.png, 2.png, ... という連番のファイルを想定
     return { filename: `maps/${level}.png` };
+}
+
+/** generate_next_mazes.py と同じ: ステージ N と同じ一辺のマス数 (奇数) */
+function mazeSizeForStageDifficulty(level) {
+    return 2 * level + 7;
+}
+
+/**
+ * 反復DFSで迷路グリッドを生成 (Python generate_maze_grid 相当)。true = 壁。
+ */
+function generateMazeGrid(size) {
+    const grid = [];
+    for (let y = 0; y < size; y++) {
+        grid.push(Array(size).fill(true));
+    }
+    const stack = [[1, 1]];
+    grid[1][1] = false;
+    const dirsTemplate = [[0, -2], [0, 2], [-2, 0], [2, 0]];
+
+    while (stack.length > 0) {
+        const [cx, cy] = stack[stack.length - 1];
+        const dirs = dirsTemplate.slice();
+        for (let i = dirs.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [dirs[i], dirs[j]] = [dirs[j], dirs[i]];
+        }
+        let carved = false;
+        for (const [dx, dy] of dirs) {
+            const nx = cx + dx;
+            const ny = cy + dy;
+            if (nx > 0 && nx < size - 1 && ny > 0 && ny < size - 1 && grid[ny][nx]) {
+                grid[cy + dy / 2][cx + dx / 2] = false;
+                grid[ny][nx] = false;
+                stack.push([nx, ny]);
+                carved = true;
+                break;
+            }
+        }
+        if (!carved) stack.pop();
+    }
+    return grid;
+}
+
+function bfsFarthestFrom(grid, sx, sy) {
+    const size = grid.length;
+    const key = (x, y) => `${x},${y}`;
+    const dist = new Map();
+    dist.set(key(sx, sy), 0);
+    const q = [[sx, sy]];
+    let far = [sx, sy];
+    while (q.length > 0) {
+        const [x, y] = q.shift();
+        for (const [dx, dy] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) {
+            const nx = x + dx;
+            const ny = y + dy;
+            if (
+                nx >= 0 && nx < size &&
+                ny >= 0 && ny < size &&
+                !grid[ny][nx] &&
+                !dist.has(key(nx, ny))
+            ) {
+                const nd = dist.get(key(x, y)) + 1;
+                dist.set(key(nx, ny), nd);
+                if (nd > dist.get(key(far[0], far[1]))) {
+                    far = [nx, ny];
+                }
+                q.push([nx, ny]);
+            }
+        }
+    }
+    return far;
+}
+
+/** Python tree_diameter_endpoints 相当 */
+function treeDiameterEndpoints(grid) {
+    const a = bfsFarthestFrom(grid, 1, 1);
+    const b = bfsFarthestFrom(grid, a[0], a[1]);
+    return [a, b];
+}
+
+/**
+ * グリッドを parseMazeFromImage と同形の迷路データに変換
+ * @param {boolean[][]} grid true = 壁
+ * @param {number[]} start [x,y]
+ * @param {number[]} goal [x,y]
+ */
+function mazeDataFromWallGrid(grid, start, goal) {
+    const size = grid.length;
+    const walls = [];
+    for (let y = 0; y < size; y++) {
+        for (let x = 0; x < size; x++) {
+            if (grid[y][x]) walls.push({ x, y });
+        }
+    }
+    return {
+        width: size,
+        height: size,
+        start: { x: start[0], y: start[1] },
+        goal: { x: goal[0], y: goal[1] },
+        walls
+    };
+}
+
+/** 難易度 level はステージ level と同じサイズのランダム迷路 (PNG 生成スクリプトと同系) */
+function generateRandomMazeForDifficulty(level) {
+    const size = mazeSizeForStageDifficulty(level);
+    const grid = generateMazeGrid(size);
+    const [start, goal] = treeDiameterEndpoints(grid);
+    return mazeDataFromWallGrid(grid, start, goal);
 }
 
 // 迷路解析のためのカラーコード定数 (RGB形式)
@@ -321,6 +439,11 @@ class MazeGame {
             direction: { dx: 0, dy: 0 }
         };
 
+        /** ランダム迷路プレイ中は true（ステージ進捗に影響しない） */
+        this.isRandomMode = false;
+        /** ランダムモード時の選択難易度（ステージ番号に対応するサイズ） */
+        this.randomDifficulty = null;
+
         this.init();
     }
 
@@ -454,20 +577,42 @@ class MazeGame {
             this.showLevelSelect();
         });
 
+        document.getElementById('random-maze-button').addEventListener('click', () => {
+            this.showRandomDifficultySelect();
+        });
+
         document.getElementById('back-to-title').addEventListener('click', () => {
             this.showScreen('title');
         });
 
+        document.getElementById('back-from-random-select').addEventListener('click', () => {
+            this.showScreen('title');
+        });
+
         document.getElementById('back-to-select').addEventListener('click', () => {
-            this.showLevelSelect();
+            if (this.isRandomMode) {
+                this.showRandomDifficultySelect();
+            } else {
+                this.showLevelSelect();
+            }
         });
 
         document.getElementById('back-to-select-clear').addEventListener('click', () => {
-            this.showLevelSelect();
+            if (this.isRandomMode) {
+                this.showRandomDifficultySelect();
+            } else {
+                this.showLevelSelect();
+            }
         });
 
         document.getElementById('next-level-btn').addEventListener('click', () => {
             this.startLevel(this.gameState.currentLevel + 1);
+        });
+
+        document.getElementById('replay-random-btn').addEventListener('click', () => {
+            if (this.randomDifficulty != null) {
+                this.startRandomMaze(this.randomDifficulty);
+            }
         });
 
         // 💡 修正: キーボード操作を全体で処理するように変更し、画面ごとにハンドラーを切り替える
@@ -668,6 +813,7 @@ class MazeGame {
         // ボタンを配列として取得
         this.clearScreenButtons = [
             document.getElementById('next-level-btn'),
+            document.getElementById('replay-random-btn'),
             document.getElementById('back-to-select-clear')
         ].filter(btn => btn); // 存在しないボタン (next-level-btnが非表示の場合など) を除外
 
@@ -753,6 +899,8 @@ class MazeGame {
             document.getElementById('start-button').focus();
         } else if (screenName === 'level-select') {
             document.getElementById('back-to-title').focus();
+        } else if (screenName === 'random-select') {
+            document.getElementById('back-from-random-select').focus();
         } else {
             // ゲーム画面など、その他の画面ではフォーカスを解除
             if (document.activeElement) document.activeElement.blur();
@@ -760,6 +908,7 @@ class MazeGame {
     }
 
     showLevelSelect() {
+        this.isRandomMode = false;
         // 💡 追加: レベルが一つもない場合はエラーメッセージ
         if (this.gameState.maxLevel === 0) {
             alert("マップファイルが見つかりません。レベル1.pngをmapsフォルダに配置してください。");
@@ -768,6 +917,45 @@ class MazeGame {
 
         this.showScreen('level-select');
         this.updateLevelGrid();
+    }
+
+    showRandomDifficultySelect() {
+        if (this.gameState.maxLevel === 0) {
+            alert("マップファイルが見つかりません。ステージ迷路を遊ぶには maps フォルダにマップを配置してください。");
+            return;
+        }
+
+        this.isRandomMode = false;
+        this.showScreen('random-select');
+        this.updateRandomDifficultyGrid();
+    }
+
+    updateRandomDifficultyGrid() {
+        const grid = document.getElementById('random-difficulty-grid');
+        const hint = document.getElementById('random-select-hint');
+        grid.innerHTML = '';
+
+        const maxCleared = this.gameState.getMaxClearedStage();
+        const sizeLine = (n) => `${mazeSizeForStageDifficulty(n)}×${mazeSizeForStageDifficulty(n)}`;
+
+        if (maxCleared === 0) {
+            hint.textContent =
+                'ステージ迷路で少なくとも1ステージをクリアすると、同じ大きさの難易度でランダム生成迷路に挑戦できます。';
+            return;
+        }
+
+        hint.textContent =
+            'クリア済みステージの番号まで選べます。番号 N はステージ N と同じ一辺のマス数の迷路が、毎回ランダムに生成されます。';
+
+        for (let i = 1; i <= maxCleared; i++) {
+            const button = document.createElement('button');
+            button.className = 'level-button available';
+            button.setAttribute('tabindex', 0);
+            button.textContent = i;
+            button.title = `サイズ ${sizeLine(i)}`;
+            button.addEventListener('click', () => this.startRandomMaze(i));
+            grid.appendChild(button);
+        }
     }
 
     updateLevelGrid() {
@@ -878,6 +1066,8 @@ class MazeGame {
         }
 
         this.gameState.currentLevel = level;
+        this.isRandomMode = false;
+        this.randomDifficulty = null;
 
         try {
             let mazeData = this.parsedMazes[level];
@@ -889,41 +1079,66 @@ class MazeGame {
                 this.parsedMazes[level] = mazeData;
             }
 
-            this.maze = new Maze(mazeData);
-            this.player = new Player(this.maze.start.x, this.maze.start.y);
-
-            this.canvas = document.getElementById('maze-canvas');
-            this.ctx = this.canvas.getContext('2d');
-
-            this.minimapCanvas = document.getElementById('minimap-canvas');
-            this.minimapCtx = this.minimapCanvas.getContext('2d');
-
-            // 💡 修正: cellSizeの計算ロジック
-            const fixedVisibleCellSize = CONTAINER_SIZE / MAX_VISIBLE_CELLS;
-            const maxFitCellSize = Math.min(CONTAINER_SIZE / this.maze.width, CONTAINER_SIZE / this.maze.height);
-
-            if (this.maze.width <= MAX_VISIBLE_CELLS && this.maze.height <= MAX_VISIBLE_CELLS) {
-                this.cellSize = Math.max(MIN_CELL_SIZE, maxFitCellSize);
-            } else {
-                this.cellSize = Math.max(MIN_CELL_SIZE, fixedVisibleCellSize);
-            }
-
-            // Canvasのサイズは500pxに固定（CSSと合わせる）
-            this.canvas.width = CONTAINER_SIZE;
-            this.canvas.height = CONTAINER_SIZE;
-
-            document.getElementById('current-level').textContent = `レベル ${level}`;
-
-            this.showScreen('game');
-            this.render();
-
-            // 💡 追加: プレイ開始後、次のレベルをバックグラウンドで読み込む
+            this.enterGameWithMazeData(mazeData, `レベル ${level}`);
             this.preloadMazeData(level + 1);
 
         } catch (error) {
             alert(`レベル ${level} の読み込みに失敗しました。\nエラー: ${error.message || error}`);
             console.error(error);
             this.showLevelSelect();
+        }
+    }
+
+    /**
+     * 迷路データを読み込み済みとしてゲーム画面を開く（ステージ／ランダム共通）
+     * @param {object} mazeData parseMazeFromImage 相当
+     * @param {string} levelLabel ヘッダ表示
+     */
+    enterGameWithMazeData(mazeData, levelLabel) {
+        this.maze = new Maze(mazeData);
+        this.player = new Player(this.maze.start.x, this.maze.start.y);
+
+        this.canvas = document.getElementById('maze-canvas');
+        this.ctx = this.canvas.getContext('2d');
+
+        this.minimapCanvas = document.getElementById('minimap-canvas');
+        this.minimapCtx = this.minimapCanvas.getContext('2d');
+
+        const fixedVisibleCellSize = CONTAINER_SIZE / MAX_VISIBLE_CELLS;
+        const maxFitCellSize = Math.min(CONTAINER_SIZE / this.maze.width, CONTAINER_SIZE / this.maze.height);
+
+        if (this.maze.width <= MAX_VISIBLE_CELLS && this.maze.height <= MAX_VISIBLE_CELLS) {
+            this.cellSize = Math.max(MIN_CELL_SIZE, maxFitCellSize);
+        } else {
+            this.cellSize = Math.max(MIN_CELL_SIZE, fixedVisibleCellSize);
+        }
+
+        this.canvas.width = CONTAINER_SIZE;
+        this.canvas.height = CONTAINER_SIZE;
+
+        document.getElementById('current-level').textContent = levelLabel;
+
+        this.showScreen('game');
+        this.render();
+    }
+
+    startRandomMaze(difficulty) {
+        if (difficulty < 1 || difficulty > this.gameState.getMaxClearedStage()) {
+            alert('この難易度はまだ選べません。対応するステージをクリアしてください。');
+            return;
+        }
+
+        this.isRandomMode = true;
+        this.randomDifficulty = difficulty;
+
+        try {
+            const mazeData = generateRandomMazeForDifficulty(difficulty);
+            const w = mazeData.width;
+            this.enterGameWithMazeData(mazeData, `ランダム迷路 難易度 ${difficulty}（${w}×${w}）`);
+        } catch (error) {
+            console.error(error);
+            alert(`ランダム迷路の生成に失敗しました。\n${error.message || error}`);
+            this.showRandomDifficultySelect();
         }
     }
 
@@ -954,25 +1169,36 @@ class MazeGame {
     completeLevel() {
         playSound('clear'); // 💡 クリア音
 
-        this.gameState.completeLevel(this.gameState.currentLevel, this.player.visitedCells);
-
-        const nextLevel = this.gameState.currentLevel + 1;
-        const hasNextLevel = nextLevel <= this.gameState.maxLevel; // 💡 変更: maxLevelは動的に設定されている
-
-        document.getElementById('clear-message').textContent =
-            hasNextLevel ? 'おめでとうございます！次のレベルに挑戦しましょう！' : 'すべてのレベルをクリアしました！';
-
         const nextBtn = document.getElementById('next-level-btn');
+        const replayRandomBtn = document.getElementById('replay-random-btn');
         const backBtn = document.getElementById('back-to-select-clear');
 
-        if (hasNextLevel) {
-            nextBtn.style.display = 'inline-block';
-            // 💡 追加: 次のレベルがある場合、「次のレベル」ボタンにフォーカスを当てる
-            nextBtn.focus();
-        } else {
+        if (this.isRandomMode) {
+            document.getElementById('clear-message').textContent =
+                'ランダム迷路をクリアしました！同じ難易度でもう一度、または別の難易度に挑戦できます。';
             nextBtn.style.display = 'none';
-            // 💡 追加: 次のレベルがない場合、「レベル選択に戻る」ボタンにフォーカスを当てる
-            backBtn.focus();
+            replayRandomBtn.style.display = 'inline-block';
+            backBtn.textContent = '難易度選択に戻る';
+            replayRandomBtn.focus();
+        } else {
+            this.gameState.completeLevel(this.gameState.currentLevel, this.player.visitedCells);
+
+            const nextLevel = this.gameState.currentLevel + 1;
+            const hasNextLevel = nextLevel <= this.gameState.maxLevel; // 💡 変更: maxLevelは動的に設定されている
+
+            document.getElementById('clear-message').textContent =
+                hasNextLevel ? 'おめでとうございます！次のレベルに挑戦しましょう！' : 'すべてのレベルをクリアしました！';
+
+            replayRandomBtn.style.display = 'none';
+            backBtn.textContent = 'レベル選択に戻る';
+
+            if (hasNextLevel) {
+                nextBtn.style.display = 'inline-block';
+                nextBtn.focus();
+            } else {
+                nextBtn.style.display = 'none';
+                backBtn.focus();
+            }
         }
 
         this.showScreen('clear');

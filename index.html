@@ -3,14 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>迷路クリアゲーム</title>
-    <link rel="stylesheet" href="style.css">
+    <title>シンプルな2D迷路</title>
+    <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
     <div id="title-screen" class="screen active">
         <div class="title-container">
-            <h1>迷路クリアゲーム</h1>
-            <button id="start-button" class="menu-button">スタート</button>
+            <h1>シンプルな2D迷路</h1>
+            <button id="start-button" class="menu-button">ステージ迷路に挑戦</button>
+            <button id="random-maze-button" class="menu-button">ランダム迷路に挑戦</button>
+        </div>
+    </div>
+
+    <div id="random-select-screen" class="screen">
+        <div class="level-select-container">
+            <h2>難易度を選択</h2>
+            <p id="random-select-hint" class="random-select-hint"></p>
+            <div id="random-difficulty-grid" class="level-grid"></div>
+            <button id="back-from-random-select" class="menu-button">タイトルに戻る</button>
         </div>
     </div>
 
@@ -64,10 +74,11 @@
             <h2>クリア！</h2>
             <p id="clear-message">おめでとうございます！</p>
             <button id="next-level-btn" class="menu-button">次のレベル</button>
+            <button id="replay-random-btn" class="menu-button" style="display:none">もう一度</button>
             <button id="back-to-select-clear" class="menu-button">レベル選択に戻る</button>
         </div>
     </div>
 
-    <script src="script.js"></script>
+    <script src="js/script.js"></script>
 </body>
 </html>

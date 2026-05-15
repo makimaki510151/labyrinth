@@ -56,6 +56,17 @@ body {
     text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
 }
 
+.title-container .menu-button + .menu-button {
+    margin-top: 16px;
+}
+
+.random-select-hint {
+    color: #555;
+    font-size: 0.95rem;
+    margin-bottom: 8px;
+    line-height: 1.5;
+}
+
 /* レベル選択画面 */
 .level-select-container {
     text-align: center;
