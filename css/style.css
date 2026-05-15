@@ -4,8 +4,35 @@
     box-sizing: border-box;
 }
 
+html {
+    background: #fff;
+    scrollbar-width: thin;
+    scrollbar-color: #9fa8da #f5f5f5;
+}
+
+html::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+html::-webkit-scrollbar-track {
+    background: #f5f5f5;
+    border-radius: 8px;
+}
+
+html::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, #9fa8da, #7986cb);
+    border-radius: 8px;
+    border: 2px solid #f5f5f5;
+}
+
+html::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, #7986cb, #5c6bc0);
+}
+
 body {
     /* ... その他のスタイル ... */
+    background: #fff;
 
     /* 修正1: 100vhの問題を解決するため、dvhを追加 */
     min-height: 100vh;
@@ -15,6 +42,122 @@ body {
     /* 垂直方向のセンタリングは維持 (全体を中央に配置する役割のため) */
     align-items: center;
     justify-content: center;
+}
+
+/* ホストで横方向のはみ出しを抑止 */
+body:has(#labyrinth-root) {
+    overflow-x: hidden;
+}
+
+/* ゲーム UI をビューポートに固定し、ホストページの body flex 等と横並びにならないようにする */
+#labyrinth-root {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior-x: none;
+    box-sizing: border-box;
+    -webkit-overflow-scrolling: touch;
+    background: #fff;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 0;
+    padding: 0 max(14px, env(safe-area-inset-right, 0px)) 0 max(14px, env(safe-area-inset-left, 0px));
+    scrollbar-width: thin;
+    scrollbar-color: #9fa8da #f5f5f5;
+}
+
+#labyrinth-root::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+#labyrinth-root::-webkit-scrollbar-track {
+    background: #f5f5f5;
+    border-radius: 8px;
+}
+
+#labyrinth-root::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, #9fa8da, #7986cb);
+    border-radius: 8px;
+    border: 2px solid #f5f5f5;
+}
+
+#labyrinth-root::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, #7986cb, #5c6bc0);
+}
+
+/* 論理解像度: 横 960×720（デフォルト）、縦は 720×960。寸法は JS が --labyrinth-design-* で上書き */
+#labyrinth-design-frame {
+    position: relative;
+    flex-shrink: 0;
+    margin: 0;
+    align-self: center;
+    overflow: hidden;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+#labyrinth-design-surface {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: var(--labyrinth-design-w, 960px);
+    height: var(--labyrinth-design-h, 720px);
+    transform-origin: 0 0;
+    will-change: transform;
+}
+
+#labyrinth-design-surface > .screen {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    max-height: 100%;
+    box-sizing: border-box;
+    align-items: center;
+    justify-content: flex-start;
+}
+
+/* コンテンツが短い画面は従来どおり中央 */
+#labyrinth-design-surface > #title-screen,
+#labyrinth-design-surface > #clear-screen {
+    justify-content: center;
+}
+
+/* ステージ／難易度選択は縦に伸びるため上詰め＋内側スクロールでクリップしない */
+#labyrinth-design-surface > #level-select-screen,
+#labyrinth-design-surface > #random-select-screen {
+    flex-direction: column;
+    min-height: 0;
+}
+
+#labyrinth-design-surface #level-select-screen .level-select-container,
+#labyrinth-design-surface #random-select-screen .level-select-container {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: 100%;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: #9fa8da #f5f5f5;
+}
+
+#labyrinth-design-surface #level-select-screen .level-select-container::-webkit-scrollbar,
+#labyrinth-design-surface #random-select-screen .level-select-container::-webkit-scrollbar {
+    width: 8px;
+}
+
+#labyrinth-design-surface #level-select-screen .level-select-container::-webkit-scrollbar-thumb,
+#labyrinth-design-surface #random-select-screen .level-select-container::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, #9fa8da, #7986cb);
+    border-radius: 8px;
 }
 
 .screen {
@@ -146,6 +289,37 @@ body {
 }
 
 
+#labyrinth-design-surface #game-screen.screen {
+    padding: 0;
+    overflow: hidden;
+    align-items: stretch;
+    justify-content: flex-start;
+}
+
+#labyrinth-design-surface #game-screen .game-container {
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    flex: 1 1 auto;
+    min-height: 0;
+    margin: 0;
+    border-radius: 0;
+    padding: clamp(2px, 0.5dvh, 8px) clamp(6px, 1.2vw, 12px);
+    box-shadow: none;
+}
+
+#labyrinth-design-surface #game-screen .game-main {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow: hidden;
+    justify-content: flex-start;
+}
+
+#labyrinth-design-surface #game-screen .game-sidebar {
+    flex-shrink: 0;
+    gap: 10px;
+}
+
 /* ゲーム画面 */
 .game-container {
     background: rgba(255, 255, 255, 0.95);
@@ -154,8 +328,10 @@ body {
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
     display: flex;
     flex-direction: column;
-    max-width: 750px;
+    max-width: 100%;
     width: 100%;
+    flex: 1 1 auto;
+    min-height: 0;
 }
 
 .game-header {
@@ -163,6 +339,11 @@ body {
     justify-content: space-between;
     align-items: center;
     margin-bottom: 15px;
+    flex: 0 0 auto;
+}
+
+#labyrinth-design-surface #game-screen .game-header {
+    margin-bottom: 8px;
 }
 
 .game-header span {
@@ -174,27 +355,60 @@ body {
     display: flex;
     gap: 20px;
     width: 100%;
+    min-width: 0;
+    min-height: 0;
+    flex: 1 1 auto;
+    align-items: stretch;
 }
 
 .maze-container {
-    flex-grow: 1;
+    flex: 0 0 auto;
+    min-width: 0;
+    min-height: 0;
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    max-height: 100%;
     display: flex;
     justify-content: center;
     align-items: center;
     border: 2px solid #333;
     background-color: #000;
     border-radius: 5px;
-    /* 修正: 迷路表示エリアの最大サイズを固定 */
-    max-width: 500px;
-    max-height: 500px;
     overflow: hidden;
+}
+
+.maze-container #maze-canvas {
+    width: 100%;
+    height: 100%;
+    max-width: 100%;
+    max-height: 100%;
+    display: block;
+    object-fit: contain;
+}
+
+/* コンテンツ領域とキャンバス解像度を一致させる（境界の微妙なマスクを防ぐ） */
+#labyrinth-design-surface .maze-container #maze-canvas {
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: fill;
 }
 
 .game-sidebar {
     display: flex;
     flex-direction: column;
     gap: 20px;
-    min-width: 180px;
+    min-width: 0;
+    flex: 0 0 auto;
+    max-width: 100%;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .game-sidebar {
+        min-width: 128px;
+    }
 }
 
 /* 💡 追加: ミニマップコンテナのスタイル */
@@ -204,19 +418,43 @@ body {
     border: 1px solid #ccc;
     border-radius: 5px;
     background: #f9f9f9;
+    min-width: 0;
+    max-width: 100%;
+    flex: 0 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
 }
 
 .minimap-container h3 {
     font-size: 1rem;
     margin-bottom: 5px;
     color: #333;
+    flex-shrink: 0;
 }
 
 #minimap-canvas {
     border: 1px solid #333;
     display: block;
-    /* センター寄せのため */
     margin: 0 auto;
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+    flex: 0 0 auto;
+    aspect-ratio: 1 / 1;
+    object-fit: contain;
+}
+
+/* JS がピクセル寸法を決める。幅100%で引き伸ばすとぼやけるためデザイン面内は上書き */
+#labyrinth-design-surface #minimap-canvas {
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    aspect-ratio: unset;
+    object-fit: none;
+    image-rendering: crisp-edges;
+    image-rendering: pixelated;
 }
 
 /* 音量調節バーのスタイル */
@@ -331,8 +569,13 @@ body {
     font-size: 1rem;
 }
 
-/* レスポンシブデザイン */
-@media (max-width: 768px) {
+/* 設計面（#labyrinth-design-surface）内では、ビューポート基準の max-height ではなく表面に収める */
+#labyrinth-design-surface .game-container {
+    max-height: 100%;
+}
+
+/* レスポンシブデザイン（狭いウィンドウ・タッチ端末でスマホ用パネル表示） */
+@media (max-width: 768px), (pointer: coarse) {
     .title-container h1 {
         font-size: 2rem;
     }
@@ -346,7 +589,7 @@ body {
     }
 
     .game-sidebar {
-        min-width: auto;
+        min-width: 0;
         width: 100%;
         flex-direction: column;
         gap: 15px;
@@ -396,7 +639,48 @@ body {
     /* script.jsで設定されているwidth/height属性をCSSで上書きし、縮小させる */
     #maze-canvas {
         width: 100% !important;
+        height: 100% !important;
+        max-width: 100%;
+        max-height: 100%;
+        object-fit: contain;
+    }
+
+    #labyrinth-design-surface .game-container {
+        max-height: 100%;
+    }
+
+    #labyrinth-design-surface #game-screen .game-container {
+        max-height: none;
+        overflow: visible;
+        height: 100%;
+        padding: 2px 8px;
+    }
+
+    #labyrinth-design-surface #game-screen .game-header {
+        margin-bottom: 4px;
+    }
+
+    #labyrinth-design-surface .game-sidebar {
+        flex: 1 1 auto;
+        min-height: 0;
+    }
+
+    #labyrinth-design-surface .minimap-container {
+        align-items: center;
+        padding: 6px 8px;
+        flex: 1 1 auto;
+        min-height: 0;
+        justify-content: center;
+    }
+
+    #labyrinth-design-surface .minimap-container h3 {
+        font-size: 0.85rem;
+        margin-bottom: 4px;
+    }
+
+    #labyrinth-design-surface #maze-canvas {
+        width: auto !important;
         height: auto !important;
-        /* アスペクト比を維持 */
+        object-fit: fill;
     }
 }

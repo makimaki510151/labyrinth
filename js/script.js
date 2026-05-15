@@ -3,10 +3,18 @@ let audioCtx = null;
 // 💡 追加: 全体の音量を調整するためのマスターゲインノード
 let masterGainNode = null;
 
-// 💡 修正: 迷路表示に関する定数
-const CONTAINER_SIZE = 500; // 迷路コンテナの固定サイズ (CSSと合わせる)
+// 💡 修正: 迷路表示に関する定数（実寸は layoutMazeAndMinimapFromDom で決定）
+const CONTAINER_SIZE = 500; // レイアウト取得前のフォールバック
+const MAZE_VIEWPORT_MIN = 120;
+/** 異常な数値のガードのみ（通常は game-main の空きに合わせて決める） */
+const MAZE_VIEWPORT_SAFETY_MAX = 4096;
+/** 横並び: メイン優先でサイドに確保する最小幅（実際のサイドバーが広い場合は後から縮小） */
+const MAZE_PRIORITY_ROW_SIDEBAR_RESERVE = 104;
 const MIN_CELL_SIZE = 20; // 💡 修正: プレイヤーのセルがこれより小さくならないようにする最小サイズ (40pxから25pxに緩和)
 const MAX_VISIBLE_CELLS = 25; // 💡 修正: 画面に表示したい最大のグリッド数 (19x19)
+/** メイン一辺 : ミニマップ一辺 = 6 : 4（ミニマップ一辺 = メイン × 4/6） */
+const MINIMAP_SIDE_FROM_MAIN_RATIO = 4 / 6;
+const MINIMAP_VIEWPORT_MIN = 48;
 
 // 音を生成して再生する汎用関数
 // type: 'move', 'hit', 'clear'
@@ -138,12 +146,15 @@ class GameState {
 }
 
 /**
- * 指定されたレベル番号に対応する迷路画像ファイル名を取得
- * @param {number} level 
- * @returns {object} { filename: string } 
+ * 指定されたレベル番号に対応する迷路画像の参照を取得
+ * @param {number} level
+ * @returns {object} { filename: string } — ファイルパスまたは data:image/png;base64,...
  */
 function getMazeConfig(level) {
-    // 1.png, 2.png, ... という連番のファイルを想定
+    const emb = typeof window !== 'undefined' && window.__LABYRINTH_EMBEDDED_MAPS__;
+    if (emb && typeof emb[level] === 'string' && emb[level].length > 0) {
+        return { filename: `data:image/png;base64,${emb[level]}` };
+    }
     return { filename: `maps/${level}.png` };
 }
 
@@ -273,8 +284,10 @@ function parseMazeFromImage(imageUrl) {
     return new Promise((resolve, reject) => {
         const img = new Image();
 
-        // 💡 クロスオリジンエラー対策
-        img.crossOrigin = 'Anonymous';
+        // data: URL では Anonymous を付けると読み込みに失敗するブラウザがある
+        if (!String(imageUrl).startsWith('data:')) {
+            img.crossOrigin = 'Anonymous';
+        }
 
         img.onload = function () {
             const width = img.width;
@@ -416,6 +429,209 @@ class Maze {
     }
 }
 
+/**
+ * unityroom 等で index.html のマークアップが無いとき、ゲーム UI を body に差し込む（index.html と同じ構造）。
+ * #labyrinth-root で包み、ホストの body レイアウトの影響を受けないようにする。
+ */
+const LABYRINTH_SHELL_HTML = `
+<div id="labyrinth-root">
+<div id="labyrinth-design-frame">
+<div id="labyrinth-design-surface">
+<div id="title-screen" class="screen active">
+    <div class="title-container">
+        <h1>シンプルな2D迷路</h1>
+        <button id="start-button" class="menu-button" type="button">ステージ迷路に挑戦</button>
+        <button id="random-maze-button" class="menu-button" type="button">ランダム迷路に挑戦</button>
+    </div>
+</div>
+<div id="random-select-screen" class="screen">
+    <div class="level-select-container">
+        <h2>難易度を選択</h2>
+        <p id="random-select-hint" class="random-select-hint"></p>
+        <div id="random-difficulty-grid" class="level-grid"></div>
+        <button id="back-from-random-select" class="menu-button" type="button">タイトルに戻る</button>
+    </div>
+</div>
+<div id="level-select-screen" class="screen">
+    <div class="level-select-container">
+        <h2>迷路を選択</h2>
+        <div id="level-grid" class="level-grid"></div>
+        <button id="back-to-title" class="menu-button" type="button">タイトルに戻る</button>
+    </div>
+</div>
+<div id="game-screen" class="screen">
+    <div class="game-container">
+        <div class="game-header">
+            <button id="back-to-select" class="menu-button small" type="button">戻る</button>
+            <span id="current-level">レベル 1</span>
+        </div>
+        <div class="game-main">
+            <div class="maze-container">
+                <canvas id="maze-canvas" width="400" height="400"></canvas>
+            </div>
+            <div class="game-sidebar">
+                <div class="controls" id="mobile-controls">
+                    <div id="joystick-container">
+                        <div id="joystick-base">
+                            <div id="joystick-handle"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="volume-control">
+                    <label for="volume-slider">音量調節</label>
+                    <input type="range" id="volume-slider" min="0" max="1" step="0.01" value="0.3">
+                </div>
+                <div class="minimap-container">
+                    <h3>ミニマップ</h3>
+                    <canvas id="minimap-canvas" width="180" height="180"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<div id="clear-screen" class="screen">
+    <div class="clear-container">
+        <h2>クリア！</h2>
+        <p id="clear-message">おめでとうございます！</p>
+        <button id="next-level-btn" class="menu-button" type="button">次のレベル</button>
+        <button id="replay-random-btn" class="menu-button" type="button" style="display:none">もう一度</button>
+        <button id="back-to-select-clear" class="menu-button" type="button">レベル選択に戻る</button>
+    </div>
+</div>
+</div>
+</div>
+</div>
+`.trim();
+
+function ensureLabyrinthDom() {
+    if (document.getElementById('labyrinth-root')) {
+        return;
+    }
+    const screenIds = [
+        'title-screen',
+        'random-select-screen',
+        'level-select-screen',
+        'game-screen',
+        'clear-screen',
+    ];
+    const screens = screenIds.map((id) => document.getElementById(id)).filter(Boolean);
+    if (screens.length > 0) {
+        const root = document.createElement('div');
+        root.id = 'labyrinth-root';
+        const frame = document.createElement('div');
+        frame.id = 'labyrinth-design-frame';
+        const surface = document.createElement('div');
+        surface.id = 'labyrinth-design-surface';
+        const first = screens[0];
+        first.parentNode.insertBefore(root, first);
+        root.appendChild(frame);
+        frame.appendChild(surface);
+        screens.forEach((el) => surface.appendChild(el));
+        return;
+    }
+    const body = document.body;
+    if (!body) {
+        console.error('document.body がありません。');
+        return;
+    }
+    body.insertAdjacentHTML('beforeend', LABYRINTH_SHELL_HTML);
+}
+
+/** index 等で root だけ先にある場合、設計面（frame / surface）で包む */
+function ensureLabyrinthScaleHierarchy() {
+    const root = document.getElementById('labyrinth-root');
+    if (!root || document.getElementById('labyrinth-design-surface')) {
+        return;
+    }
+    const frame = document.createElement('div');
+    frame.id = 'labyrinth-design-frame';
+    const surface = document.createElement('div');
+    surface.id = 'labyrinth-design-surface';
+    while (root.firstChild) {
+        surface.appendChild(root.firstChild);
+    }
+    root.appendChild(frame);
+    frame.appendChild(surface);
+}
+
+/** 横持ち時の論理解像度（デフォルト）。縦持ちでは 720×960 に入れ替え */
+const LABYRINTH_DEFAULT_W = 960;
+const LABYRINTH_DEFAULT_H = 720;
+
+function labyrinthRootContentSize() {
+    const root = document.getElementById('labyrinth-root');
+    const vv = window.visualViewport;
+    const fbw = vv ? vv.width : window.innerWidth;
+    const fbh = vv ? vv.height : window.innerHeight;
+    if (!root) {
+        return { w: Math.max(1, fbw), h: Math.max(1, fbh) };
+    }
+    const cr = root.getBoundingClientRect();
+    const cs = getComputedStyle(root);
+    const pl = parseFloat(cs.paddingLeft) || 0;
+    const pr = parseFloat(cs.paddingRight) || 0;
+    const pt = parseFloat(cs.paddingTop) || 0;
+    const pb = parseFloat(cs.paddingBottom) || 0;
+    const w = Math.max(1, cr.width - pl - pr);
+    const h = Math.max(1, cr.height - pt - pb);
+    return { w, h };
+}
+
+function syncLabyrinthDesignScale() {
+    const frame = document.getElementById('labyrinth-design-frame');
+    const surface = document.getElementById('labyrinth-design-surface');
+    const root = document.getElementById('labyrinth-root');
+    if (!frame || !surface) {
+        return;
+    }
+    const { w: innerW, h: innerH } = labyrinthRootContentSize();
+    if (innerW < 1) {
+        return;
+    }
+    if (innerH < 1) {
+        return;
+    }
+
+    const portrait = innerH > innerW;
+    const DW = portrait ? LABYRINTH_DEFAULT_H : LABYRINTH_DEFAULT_W;
+    const DH = portrait ? LABYRINTH_DEFAULT_W : LABYRINTH_DEFAULT_H;
+
+    /* 常に contain: 横・縦とも親内にはみ出さない。フレーム寸法はアスペクト比 DW:DH のまま */
+    const rawS = Math.min(innerW / DW, innerH / DH);
+    const s = Math.min(Math.max(rawS, 0.0001), 4);
+
+    if (root) {
+        root.style.setProperty('--labyrinth-design-w', `${DW}px`);
+        root.style.setProperty('--labyrinth-design-h', `${DH}px`);
+    }
+
+    frame.style.width = `${DW * s}px`;
+    frame.style.height = `${DH * s}px`;
+    surface.style.transform = `scale(${s})`;
+}
+
+function bindLabyrinthScaleListenersOnce() {
+    if (window.__labyrinthScaleListenersBound) {
+        return;
+    }
+    window.__labyrinthScaleListenersBound = true;
+    const onCh = () => {
+        syncLabyrinthDesignScale();
+        requestAnimationFrame(() => {
+            const g = window.game;
+            if (g && typeof g.layoutMazeAndMinimapFromDom === 'function') {
+                g.layoutMazeAndMinimapFromDom();
+            }
+        });
+    };
+    window.addEventListener('resize', onCh);
+    window.addEventListener('orientationchange', onCh);
+    document.addEventListener('fullscreenchange', onCh);
+    if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', onCh);
+    }
+}
+
 // ゲームクラス
 class MazeGame {
     constructor() {
@@ -427,6 +643,7 @@ class MazeGame {
         this.minimapCanvas = null; // 💡 追加: ミニマップCanvas
         this.minimapCtx = null; // 💡 追加: ミニマップCtx
         this.cellSize = 25;
+        this.mazeViewportPx = CONTAINER_SIZE;
         this.parsedMazes = {}; // 💡 保持: 一度読み込んだマップをキャッシュ
 
         // 💡 追加: 長押し移動のためのタイマー
@@ -449,17 +666,36 @@ class MazeGame {
 
     // 💡 変更: initをasyncにし、最大レベルを動的に設定する処理を追加
     async init() {
+        ensureLabyrinthDom();
+        ensureLabyrinthScaleHierarchy();
+        syncLabyrinthDesignScale();
+        bindLabyrinthScaleListenersOnce();
         await this.determineMaxLevel(); // 💡 変更: 最大レベルを決定
         this.setupEventListeners();
         this.setupJoystick(); // 💡 追加: ジョイスティックのセットアップ
         this.initAudio(); // 💡 追加: オーディオコンテキストの初期化
         this.showScreen('title');
+        requestAnimationFrame(() => syncLabyrinthDesignScale());
     }
 
     /**
      * 💡 変更: mapsフォルダ内の連番ファイル数を検知し、最大レベルを設定（画像データは読み込まない）
      */
     async determineMaxLevel() {
+        const emb = typeof window !== 'undefined' && window.__LABYRINTH_EMBEDDED_MAPS__;
+        if (emb && typeof emb === 'object') {
+            const keys = Object.keys(emb)
+                .map(Number)
+                .filter((k) => Number.isFinite(k) && k > 0 && typeof emb[k] === 'string' && emb[k].length > 0);
+            if (keys.length > 0) {
+                const maxLevel = Math.max(...keys);
+                this.gameState.setMaxLevel(maxLevel);
+                console.log(`埋め込みマップから最大レベル: ${maxLevel}`);
+                this.preloadMazeData(1);
+                return;
+            }
+        }
+
         const MAX_CHECK_LIMIT = 99; // 念のためチェックの上限を設定
         let maxLevel = 0;
 
@@ -468,14 +704,16 @@ class MazeGame {
             try {
                 // 💡 変更: 実際のパース処理ではなく、画像の存在チェックのみを行う
                 const img = new Image();
-                img.crossOrigin = 'Anonymous';
-                
+                if (!String(config.filename).startsWith('data:')) {
+                    img.crossOrigin = 'Anonymous';
+                }
+
                 const loadPromise = new Promise((resolve, reject) => {
                     img.onload = () => resolve(true);
                     img.onerror = () => reject(new Error('Load failed'));
                     img.src = config.filename;
                 });
-                
+
                 await loadPromise;
                 maxLevel = i;
             } catch (error) {
@@ -518,6 +756,10 @@ class MazeGame {
     // 💡 修正・拡張: オーディオコンテキストとマスターゲインノードの初期化
     initAudio() {
         const slider = document.getElementById('volume-slider');
+        if (!slider) {
+            console.warn('音量スライダーが見つかりません。');
+            return;
+        }
 
         // 💡 localStorageから保存された音量を読み込み、スライダーに適用
         const savedVolume = localStorage.getItem('gameVolume');
@@ -888,19 +1130,46 @@ class MazeGame {
 
     // 💡 修正: showScreenで画面遷移時の処理を追加
     showScreen(screenName) {
-        document.querySelectorAll('.screen').forEach(screen => {
+        const target = document.getElementById(`${screenName}-screen`);
+        if (!target) {
+            console.error('画面要素が見つかりません:', screenName);
+            return;
+        }
+        if (screenName !== 'game') {
+            const mw = document.querySelector('.maze-container');
+            if (mw) {
+                mw.style.width = '';
+                mw.style.height = '';
+                mw.style.flex = '';
+                mw.style.alignSelf = '';
+                mw.style.boxSizing = '';
+            }
+        }
+        document.querySelectorAll('.screen').forEach((screen) => {
             screen.classList.remove('active');
         });
-        document.getElementById(`${screenName}-screen`).classList.add('active');
+        target.classList.add('active');
         this.gameState.currentScreen = screenName;
+
+        syncLabyrinthDesignScale();
+        requestAnimationFrame(() => {
+            if (
+                screenName === 'game' &&
+                typeof this.layoutMazeAndMinimapFromDom === 'function' &&
+                this.canvas &&
+                this.maze
+            ) {
+                this.layoutMazeAndMinimapFromDom();
+            }
+        });
 
         // 💡 追記: 画面切り替え時に適切な要素にフォーカスを当てる
         if (screenName === 'title') {
-            document.getElementById('start-button').focus();
+            document.getElementById('start-button')?.focus();
         } else if (screenName === 'level-select') {
-            document.getElementById('back-to-title').focus();
+            document.getElementById('back-to-title')?.focus();
         } else if (screenName === 'random-select') {
-            document.getElementById('back-from-random-select').focus();
+            document.getElementById('back-from-random-select')?.focus();
         } else {
             // ゲーム画面など、その他の画面ではフォーカスを解除
             if (document.activeElement) document.activeElement.blur();
@@ -933,6 +1202,9 @@ class MazeGame {
     updateRandomDifficultyGrid() {
         const grid = document.getElementById('random-difficulty-grid');
         const hint = document.getElementById('random-select-hint');
+        if (!grid || !hint) {
+            return;
+        }
         grid.innerHTML = '';
 
         const maxCleared = this.gameState.getMaxClearedStage();
@@ -960,6 +1232,9 @@ class MazeGame {
 
     updateLevelGrid() {
         const grid = document.getElementById('level-grid');
+        if (!grid) {
+            return;
+        }
         grid.innerHTML = '';
         let firstUnlocked = null; // 💡 追加: 最初にアンロックされたレベル
 
@@ -1104,22 +1379,175 @@ class MazeGame {
         this.minimapCanvas = document.getElementById('minimap-canvas');
         this.minimapCtx = this.minimapCanvas.getContext('2d');
 
-        const fixedVisibleCellSize = CONTAINER_SIZE / MAX_VISIBLE_CELLS;
-        const maxFitCellSize = Math.min(CONTAINER_SIZE / this.maze.width, CONTAINER_SIZE / this.maze.height);
+        document.getElementById('current-level').textContent = levelLabel;
 
+        this.showScreen('game');
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => this.layoutMazeAndMinimapFromDom());
+        });
+    }
+
+    /** .game-main の空きに合わせ、メイン迷路を正方形で配置しミニマップも可能な範囲で拡大 */
+    layoutMazeAndMinimapFromDom() {
+        if (!this.canvas || !this.ctx || !this.maze || this.gameState.currentScreen !== 'game') {
+            return;
+        }
+        const main = document.querySelector('.game-main');
+        const mazeWrap = document.querySelector('.maze-container');
+        const sidebar = document.querySelector('.game-sidebar');
+        const mmWrap = document.querySelector('.minimap-container');
+        if (!main || !mazeWrap) {
+            return;
+        }
+
+        const mainStyle = getComputedStyle(main);
+        const gapRaw = mainStyle.gap || mainStyle.columnGap || '0';
+        const gapTokens = gapRaw.split(/\s+/).map((t) => parseFloat(t)).filter((n) => !Number.isNaN(n));
+        const gap = gapTokens.length > 0 ? gapTokens[0] : 20;
+
+        const flexDir = mainStyle.flexDirection;
+        const isColumn = flexDir === 'column' || flexDir === 'column-reverse';
+
+        /** メイン:ミニマップ ≒ 6:4。バッファ解像度＝表示ピクセルでぼけないようにする */
+        const applyMinimap = (mainSide) => {
+            if (!this.minimapCanvas || !this.minimapCtx || !mmWrap) {
+                return;
+            }
+            const ideal = Math.floor(mainSide * MINIMAP_SIDE_FROM_MAIN_RATIO);
+            const pad = 16;
+            const byWidth = Math.floor(mmWrap.clientWidth - pad);
+            const h3 = mmWrap.querySelector('h3');
+            const chrome = (h3 ? h3.offsetHeight : 18) + 12;
+            const byHeight = Math.floor(mmWrap.clientHeight - chrome);
+            let ms = ideal;
+            if (Number.isFinite(byWidth) && byWidth > 0) {
+                ms = Math.min(ms, byWidth);
+            }
+            if (Number.isFinite(byHeight) && byHeight > 0) {
+                ms = Math.min(ms, byHeight);
+            }
+            ms = Math.max(MINIMAP_VIEWPORT_MIN, ms);
+            if (this.minimapCanvas.width !== ms || this.minimapCanvas.height !== ms) {
+                this.minimapCanvas.width = ms;
+                this.minimapCanvas.height = ms;
+            }
+            this.minimapCanvas.style.width = `${ms}px`;
+            this.minimapCanvas.style.height = `${ms}px`;
+        };
+
+        const applyMazeBox = (side) => {
+            mazeWrap.style.boxSizing = 'border-box';
+            mazeWrap.style.flex = '0 0 auto';
+            mazeWrap.style.alignSelf = 'center';
+            mazeWrap.style.maxWidth = '100%';
+            mazeWrap.style.maxHeight = '100%';
+            mazeWrap.style.width = `${side}px`;
+            mazeWrap.style.height = `${side}px`;
+        };
+
+        const syncCanvasToMazeInner = () => {
+            void mazeWrap.offsetHeight;
+            const inner = Math.max(
+                1,
+                Math.floor(Math.min(mazeWrap.clientWidth, mazeWrap.clientHeight))
+            );
+            this.applyMazeViewportPixels(inner);
+        };
+
+        if (isColumn) {
+            const mainW = main.clientWidth;
+            const mainH = main.clientHeight;
+
+            const measureStack = () => {
+                void main.offsetHeight;
+                if (!sidebar) {
+                    return mazeWrap.offsetHeight;
+                }
+                return mazeWrap.offsetHeight + gap + sidebar.offsetHeight;
+            };
+
+            const trySide = (trial) => {
+                const s = Math.max(
+                    MAZE_VIEWPORT_MIN,
+                    Math.min(Math.floor(trial), mainW, MAZE_VIEWPORT_SAFETY_MAX)
+                );
+                applyMazeBox(s);
+                syncCanvasToMazeInner();
+                applyMinimap(s);
+                return measureStack();
+            };
+
+            let lo = MAZE_VIEWPORT_MIN;
+            let hi = Math.floor(Math.min(mainW, mainH - gap, MAZE_VIEWPORT_SAFETY_MAX));
+            if (hi < lo) {
+                hi = lo;
+            }
+
+            if (trySide(lo) > mainH + 2) {
+                applyMazeBox(lo);
+                syncCanvasToMazeInner();
+                applyMinimap(lo);
+            } else {
+                while (lo < hi) {
+                    const mid = Math.floor((lo + hi + 1) / 2);
+                    const stack = trySide(mid);
+                    if (stack <= mainH + 2) {
+                        lo = mid;
+                    } else {
+                        hi = mid - 1;
+                    }
+                }
+                applyMazeBox(lo);
+                syncCanvasToMazeInner();
+                applyMinimap(lo);
+            }
+        } else {
+            let remainderW = main.clientWidth - gap - MAZE_PRIORITY_ROW_SIDEBAR_RESERVE;
+            let remainderH = main.clientHeight;
+            remainderW = Math.max(0, remainderW);
+            remainderH = Math.max(0, remainderH);
+
+            let side = Math.floor(Math.min(remainderW, remainderH));
+            side = Math.max(MAZE_VIEWPORT_MIN, Math.min(MAZE_VIEWPORT_SAFETY_MAX, side));
+
+            applyMazeBox(side);
+            void main.offsetWidth;
+
+            if (sidebar) {
+                const used =
+                    mazeWrap.offsetWidth + gap + sidebar.offsetWidth - main.clientWidth;
+                if (used > 2) {
+                    side = Math.max(MAZE_VIEWPORT_MIN, side - Math.ceil(used));
+                    applyMazeBox(side);
+                }
+                if (mazeWrap.offsetHeight > main.clientHeight + 2) {
+                    side = Math.max(
+                        MAZE_VIEWPORT_MIN,
+                        Math.min(side, Math.floor(main.clientHeight))
+                    );
+                    applyMazeBox(side);
+                }
+            }
+
+            syncCanvasToMazeInner();
+            applyMinimap(side);
+        }
+
+        this.render();
+    }
+
+    applyMazeViewportPixels(side) {
+        const s = side;
+        this.mazeViewportPx = s;
+        const fixedVisibleCellSize = s / MAX_VISIBLE_CELLS;
+        const maxFitCellSize = Math.min(s / this.maze.width, s / this.maze.height);
         if (this.maze.width <= MAX_VISIBLE_CELLS && this.maze.height <= MAX_VISIBLE_CELLS) {
             this.cellSize = Math.max(MIN_CELL_SIZE, maxFitCellSize);
         } else {
             this.cellSize = Math.max(MIN_CELL_SIZE, fixedVisibleCellSize);
         }
-
-        this.canvas.width = CONTAINER_SIZE;
-        this.canvas.height = CONTAINER_SIZE;
-
-        document.getElementById('current-level').textContent = levelLabel;
-
-        this.showScreen('game');
-        this.render();
+        this.canvas.width = s;
+        this.canvas.height = s;
     }
 
     startRandomMaze(difficulty) {
@@ -1376,8 +1804,12 @@ class MazeGame {
     }
 }
 
-// ゲーム開始
-document.addEventListener('DOMContentLoaded', () => {
-    // 💡 変更: MazeGameの初期化が非同期になったため、DOMContentLoadedでインスタンスを作成し、initを呼び出す
+// ゲーム開始（通常の <script src> と Build ローダー注入の両方で動くよう readyState を見る）
+function bootMazeGame() {
     window.game = new MazeGame();
-});
+}
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bootMazeGame);
+} else {
+    bootMazeGame();
+}

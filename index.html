@@ -4,9 +4,61 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>シンプルな2D迷路</title>
-    <link rel="stylesheet" href="css/style.css">
+    <style>
+        html,
+        body {
+            background: #fff;
+        }
+        #unity-bootstrap {
+            position: fixed;
+            inset: 0;
+            z-index: 9998;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            background: rgba(245, 248, 252, 0.95);
+            font-family: system-ui, sans-serif;
+            font-weight: 600;
+            color: #1a237e;
+        }
+        #unity-loading-bar {
+            width: min(320px, 86vw);
+            height: 12px;
+            border: 2px solid rgba(63, 81, 181, 0.45);
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.7);
+            overflow: hidden;
+        }
+        #unity-progress-bar-full {
+            width: 0%;
+            height: 100%;
+            background: linear-gradient(90deg, #5c6bc0, #3949ab);
+            transition: width 0.12s ease-out;
+        }
+        #unity-canvas {
+            position: fixed;
+            width: 1px;
+            height: 1px;
+            left: 0;
+            top: 0;
+            opacity: 0;
+            pointer-events: none;
+        }
+    </style>
 </head>
 <body>
+    <canvas id="unity-canvas" width="1" height="1" aria-hidden="true"></canvas>
+    <div id="unity-bootstrap">
+        <span>読み込み中…</span>
+        <div id="unity-loading-bar">
+            <div id="unity-progress-bar-full"></div>
+        </div>
+    </div>
+    <div id="labyrinth-root">
+    <div id="labyrinth-design-frame">
+    <div id="labyrinth-design-surface">
     <div id="title-screen" class="screen active">
         <div class="title-container">
             <h1>シンプルな2D迷路</h1>
@@ -78,7 +130,37 @@
             <button id="back-to-select-clear" class="menu-button">レベル選択に戻る</button>
         </div>
     </div>
+    </div>
+    </div>
+    </div>
 
-    <script src="js/script.js"></script>
+    <script src="Build/labyrinth.loader.js"></script>
+    <script>
+        var unityCanvas = document.getElementById("unity-canvas");
+        var bootstrap = document.getElementById("unity-bootstrap");
+        var progressBarFull = document.getElementById("unity-progress-bar-full");
+        var config = {
+            dataUrl: "Build/labyrinth.data.gz",
+            frameworkUrl: "Build/labyrinth.framework.js.gz",
+            codeUrl: "Build/labyrinth.wasm.gz",
+            companyName: "nec",
+            productName: "labyrinth",
+            productVersion: "1.0.0"
+        };
+        createUnityInstance(unityCanvas, config, function (progress) {
+            if (progressBarFull) {
+                progressBarFull.style.width = (100 * progress) + "%";
+            }
+        })
+            .then(function (instance) {
+                window.unityInstance = instance;
+                if (bootstrap) {
+                    bootstrap.style.display = "none";
+                }
+            })
+            .catch(function (message) {
+                alert(message);
+            });
+    </script>
 </body>
 </html>
