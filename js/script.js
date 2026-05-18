@@ -40,19 +40,19 @@ function playSound(type) {
             // 移動音: 短いクリック音
             freq = 440; // A4
             duration = 0.05;
-            initialVolume = 0.3; // 個別の音量設定
+            initialVolume = 0.55;
             break;
         case 'hit':
             // 壁衝突音: 低いノイズ音
             freq = 120; // 低い周波数
             duration = 0.1;
-            initialVolume = 0.5;
+            initialVolume = 0.85;
             break;
         case 'clear':
             // クリア音: ファンファーレのような上昇音
             freq = 660; // E5
             duration = 0.5;
-            initialVolume = 0.4;
+            initialVolume = 0.75;
             // 周波数を時間経過で上昇させる（簡単なファンファーレ）
             oscillator.frequency.linearRampToValueAtTime(880, audioCtx.currentTime + 0.2); // G#5 -> A5
             break;
@@ -511,7 +511,7 @@ const LABYRINTH_SHELL_HTML = `
                 </div>
                 <div class="volume-control">
                     <label for="volume-slider">音量調節</label>
-                    <input type="range" id="volume-slider" min="0" max="1" step="0.01" value="0.3">
+                    <input type="range" id="volume-slider" min="0" max="1" step="0.01" value="0.6">
                 </div>
                 <div class="minimap-container">
                     <h3>ミニマップ</h3>
