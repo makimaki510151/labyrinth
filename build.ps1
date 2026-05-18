@@ -3,10 +3,14 @@ $ErrorActionPreference = "Stop"
 $root = $PSScriptRoot
 $build = Join-Path $root "Build"
 $srcCss = Join-Path $root "css\style.css"
+$srcCfg = Join-Path $root "js\unityroomConfig.js"
+$srcUr = Join-Path $root "js\unityroomScore.js"
 $srcJs = Join-Path $root "js\script.js"
 $concatJs = Join-Path $root "Build\_framework.concat.js"
 
 if (-not (Test-Path $srcCss)) { throw "Missing: $srcCss" }
+if (-not (Test-Path $srcCfg)) { throw "Missing: $srcCfg" }
+if (-not (Test-Path $srcUr)) { throw "Missing: $srcUr" }
 if (-not (Test-Path $srcJs)) { throw "Missing: $srcJs" }
 
 $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
@@ -62,7 +66,11 @@ function Write-GZip-File {
 
 Write-GZip-File -SourcePath $srcCss -DestGzPath (Join-Path $build "labyrinth.data.gz")
 
-$bundleText = $embeddedMapsDecl + [System.IO.File]::ReadAllText($srcJs, $utf8NoBom)
+$bundleText =
+    $embeddedMapsDecl +
+    [System.IO.File]::ReadAllText($srcCfg, $utf8NoBom) +
+    [System.IO.File]::ReadAllText($srcUr, $utf8NoBom) +
+    [System.IO.File]::ReadAllText($srcJs, $utf8NoBom)
 [System.IO.File]::WriteAllText($concatJs, $bundleText, $utf8NoBom)
 Write-GZip-File -SourcePath $concatJs -DestGzPath (Join-Path $build "labyrinth.framework.js.gz")
 Remove-Item -LiteralPath $concatJs -Force

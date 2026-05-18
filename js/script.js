@@ -143,6 +143,36 @@ class GameState {
         }
         return max;
     }
+
+    /** 未踏ルート通過マスの累計（localStorage） */
+    getTotalNewPathCells() {
+        const saved = localStorage.getItem('mazeGameNewPathTotal');
+        const n = saved ? parseInt(saved, 10) : 0;
+        return Number.isFinite(n) && n > 0 ? n : 0;
+    }
+
+    /** 今回のプレイで、過去に通ったことのないマス数を数える */
+    countNewPathCellsOnLevel(level, visitedCells) {
+        const previousPath = this.getCompletedPath(level);
+        let count = 0;
+        for (const cell of visitedCells) {
+            if (!previousPath.has(cell)) {
+                count += 1;
+            }
+        }
+        return count;
+    }
+
+    /** 未踏ルート通過マスを累計に加え、更新後の合計を返す */
+    addNewPathCells(count) {
+        const added = Math.max(0, Math.floor(Number(count)));
+        if (added === 0) {
+            return this.getTotalNewPathCells();
+        }
+        const total = this.getTotalNewPathCells() + added;
+        localStorage.setItem('mazeGameNewPathTotal', String(total));
+        return total;
+    }
 }
 
 /**
@@ -495,6 +525,7 @@ const LABYRINTH_SHELL_HTML = `
     <div class="clear-container">
         <h2>クリア！</h2>
         <p id="clear-message">おめでとうございます！</p>
+        <p id="ranking-send-status" class="ranking-send-status" hidden></p>
         <button id="next-level-btn" class="menu-button" type="button">次のレベル</button>
         <button id="replay-random-btn" class="menu-button" type="button" style="display:none">もう一度</button>
         <button id="back-to-select-clear" class="menu-button" type="button">レベル選択に戻る</button>
@@ -1531,6 +1562,13 @@ class MazeGame {
     completeLevel() {
         playSound('clear'); // 💡 クリア音
 
+        const rankingStatus = document.getElementById('ranking-send-status');
+        if (rankingStatus) {
+            rankingStatus.textContent = '';
+            rankingStatus.hidden = true;
+            delete rankingStatus.dataset.level;
+        }
+
         const nextBtn = document.getElementById('next-level-btn');
         const replayRandomBtn = document.getElementById('replay-random-btn');
         const backBtn = document.getElementById('back-to-select-clear');
@@ -1543,9 +1581,23 @@ class MazeGame {
             backBtn.textContent = '難易度選択に戻る';
             replayRandomBtn.focus();
         } else {
-            this.gameState.completeLevel(this.gameState.currentLevel, this.player.visitedCells);
+            const level = this.gameState.currentLevel;
+            const newPathCells = this.gameState.countNewPathCellsOnLevel(
+                level,
+                this.player.visitedCells,
+            );
+            this.gameState.completeLevel(level, this.player.visitedCells);
 
-            const nextLevel = this.gameState.currentLevel + 1;
+            const clearedStage = this.gameState.getMaxClearedStage();
+            const totalNewPathCells = this.gameState.addNewPathCells(newPathCells);
+            if (typeof window !== 'undefined' && window.LabyrinthUnityroomScore) {
+                window.LabyrinthUnityroomScore.notifyClearedStage(clearedStage);
+                if (newPathCells > 0) {
+                    window.LabyrinthUnityroomScore.notifyNewPathCells(totalNewPathCells);
+                }
+            }
+
+            const nextLevel = level + 1;
             const hasNextLevel = nextLevel <= this.gameState.maxLevel; // 💡 変更: maxLevelは動的に設定されている
 
             document.getElementById('clear-message').textContent =
@@ -1738,8 +1790,28 @@ class MazeGame {
     }
 }
 
+function onLabyrinthRankingStatus(ev) {
+    const el = document.getElementById('ranking-send-status');
+    if (!el) {
+        return;
+    }
+    const d = ev.detail || {};
+    el.textContent = d.text || '';
+    el.hidden = !d.text;
+    el.dataset.level = d.level || '';
+}
+
+function bindLabyrinthRankingStatusOnce() {
+    if (window.__labyrinthRankingStatusBound) {
+        return;
+    }
+    window.__labyrinthRankingStatusBound = true;
+    window.addEventListener('labyrinth-ranking-status', onLabyrinthRankingStatus);
+}
+
 // ゲーム開始（通常の <script src> と Build ローダー注入の両方で動くよう readyState を見る）
 function bootMazeGame() {
+    bindLabyrinthRankingStatusOnce();
     window.game = new MazeGame();
 }
 if (document.readyState === 'loading') {

@@ -805,6 +805,22 @@ body:has(#labyrinth-root) {
     margin-bottom: 30px;
 }
 
+.ranking-send-status {
+    margin: -12px 0 20px;
+    font-size: clamp(12px, 2.8vw, 15px);
+    font-weight: 700;
+    line-height: 1.35;
+    color: #7c4dff;
+}
+
+.ranking-send-status[data-level='error'] {
+    color: #ff5252;
+}
+
+.ranking-send-status[data-level='ok'] {
+    color: #69f0ae;
+}
+
 
 /* メニューボタン共通 */
 .menu-button {
