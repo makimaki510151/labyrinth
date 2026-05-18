@@ -44,9 +44,10 @@ body {
     justify-content: center;
 }
 
-/* ホストで横方向のはみ出しを抑止 */
+/* ホストで横方向のはみ出しを抑止。ルートが全画面のため document 側の縦スクロールも抑止 */
 body:has(#labyrinth-root) {
     overflow-x: hidden;
+    overflow-y: hidden;
 }
 
 /* ゲーム UI をビューポートに固定し、ホストページの body flex 等と横並びにならないようにする */
@@ -62,10 +63,10 @@ body:has(#labyrinth-root) {
     background: #fff;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    justify-content: center;
+    align-items: stretch;
+    justify-content: flex-start;
     min-height: 0;
-    padding: 0 max(14px, env(safe-area-inset-right, 0px)) 0 max(14px, env(safe-area-inset-left, 0px));
+    padding: 0;
     scrollbar-width: thin;
     scrollbar-color: #9fa8da #f5f5f5;
 }
@@ -90,25 +91,28 @@ body:has(#labyrinth-root) {
     background: linear-gradient(180deg, #7986cb, #5c6bc0);
 }
 
-/* 論理解像度: 横 960×720（デフォルト）、縦は 720×960。寸法は JS が --labyrinth-design-* で上書き */
+/* フレーム＝ルート内寸。設計面は JS が --labyrinth-design-* を実寸に合わせて更新 */
 #labyrinth-design-frame {
     position: relative;
-    flex-shrink: 0;
+    flex: 1 1 auto;
+    align-self: stretch;
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
     margin: 0;
-    align-self: center;
     overflow: hidden;
-    max-width: 100%;
+    max-width: none;
     box-sizing: border-box;
 }
 
 #labyrinth-design-surface {
     position: absolute;
-    left: 0;
-    top: 0;
-    width: var(--labyrinth-design-w, 960px);
-    height: var(--labyrinth-design-h, 720px);
-    transform-origin: 0 0;
-    will-change: transform;
+    inset: 0;
+    width: auto;
+    height: auto;
+    min-width: 0;
+    min-height: 0;
+    box-sizing: border-box;
 }
 
 #labyrinth-design-surface > .screen {
@@ -120,6 +124,7 @@ body:has(#labyrinth-root) {
     min-height: 0;
     max-height: 100%;
     box-sizing: border-box;
+    padding: 0;
     align-items: center;
     justify-content: flex-start;
 }
@@ -288,6 +293,76 @@ body:has(#labyrinth-root) {
     position: relative;
 }
 
+/* メニュー系（タイトル／ステージ・難易度選択／クリア）のみ大型表示。#game-screen は下記のまま維持 */
+#labyrinth-design-surface #title-screen .title-container,
+#labyrinth-design-surface #clear-screen .clear-container {
+    max-width: min(960px, 96%);
+    width: 100%;
+    padding: clamp(36px, 5.5vmin, 80px) clamp(28px, 4vmin, 56px);
+}
+
+#labyrinth-design-surface #title-screen .title-container h1 {
+    font-size: clamp(1.9rem, 5.8vmin, 3.6rem);
+    margin-bottom: clamp(28px, 4vmin, 52px);
+}
+
+#labyrinth-design-surface #title-screen .title-container .menu-button + .menu-button {
+    margin-top: clamp(16px, 2.8vmin, 24px);
+}
+
+#labyrinth-design-surface #clear-screen .clear-container h2 {
+    font-size: clamp(2.1rem, 5.2vmin, 3.4rem);
+    margin-bottom: clamp(12px, 2vmin, 22px);
+}
+
+#labyrinth-design-surface #clear-screen .clear-container p {
+    font-size: clamp(1.1rem, 2.9vmin, 1.45rem);
+    margin-bottom: clamp(22px, 3.2vmin, 40px);
+}
+
+#labyrinth-design-surface #level-select-screen .level-select-container,
+#labyrinth-design-surface #random-select-screen .level-select-container {
+    max-width: min(1120px, 98%);
+    width: 100%;
+    padding: clamp(22px, 3.2vmin, 40px);
+}
+
+#labyrinth-design-surface #level-select-screen .level-select-container h2,
+#labyrinth-design-surface #random-select-screen .level-select-container h2 {
+    font-size: clamp(1.55rem, 4.2vmin, 2.35rem);
+    margin-bottom: clamp(10px, 1.8vmin, 18px);
+}
+
+#labyrinth-design-surface #random-select-screen .random-select-hint {
+    font-size: clamp(1.05rem, 2.6vmin, 1.25rem);
+    margin-bottom: clamp(10px, 2vmin, 18px);
+}
+
+#labyrinth-design-surface #level-select-screen .level-grid,
+#labyrinth-design-surface #random-select-screen .level-grid {
+    gap: clamp(18px, 2.4vmin, 30px);
+    margin: clamp(18px, 2.8vmin, 32px) 0;
+    padding: clamp(10px, 1.6vmin, 18px);
+}
+
+#labyrinth-design-surface #level-select-screen .level-button,
+#labyrinth-design-surface #random-select-screen .level-button {
+    width: clamp(112px, 14vmin, 168px);
+    height: clamp(112px, 14vmin, 168px);
+    font-size: clamp(1.4rem, 3.4vmin, 2.1rem);
+    border-radius: clamp(15px, 2vmin, 24px);
+}
+
+#labyrinth-design-surface #title-screen .menu-button:not(.small),
+#labyrinth-design-surface #level-select-screen .menu-button:not(.small),
+#labyrinth-design-surface #random-select-screen .menu-button:not(.small),
+#labyrinth-design-surface #clear-screen .menu-button:not(.small) {
+    padding: clamp(17px, 3vmin, 24px) clamp(30px, 5vmin, 48px);
+    font-size: clamp(1.12rem, 2.9vmin, 1.5rem);
+    min-width: min(300px, 90%);
+    border-radius: clamp(12px, 1.8vmin, 16px);
+}
+
 
 #labyrinth-design-surface #game-screen.screen {
     padding: 0;
@@ -344,6 +419,15 @@ body:has(#labyrinth-root) {
 
 #labyrinth-design-surface #game-screen .game-header {
     margin-bottom: 8px;
+}
+
+/* メインゲームの「戻る」: 従来の .small 比でおよそ 2 倍のタップ／視認サイズ */
+#labyrinth-design-surface #game-screen .game-header .menu-button.small {
+    padding: clamp(14px, 2.2vmin, 20px) clamp(22px, 4vmin, 40px);
+    font-size: clamp(1.35rem, 3.6vmin, 2rem);
+    line-height: 1.15;
+    border-radius: 12px;
+    margin: 0;
 }
 
 .game-header span {
@@ -479,6 +563,83 @@ body:has(#labyrinth-root) {
     cursor: pointer;
 }
 
+/* 音量: メニューボタンと同系統のインディゴ／グラデで統一（設計面内のみ） */
+#labyrinth-design-surface .volume-control {
+    padding: 12px 14px;
+    border-radius: 12px;
+    border: 2px solid rgba(102, 126, 234, 0.4);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(237, 240, 255, 0.96));
+    box-shadow: 0 4px 16px rgba(57, 73, 171, 0.14);
+}
+
+#labyrinth-design-surface .volume-control label {
+    font-size: clamp(0.88rem, 2.1vmin, 1.02rem);
+    font-weight: 700;
+    color: #1a237e;
+    margin-bottom: 10px;
+    letter-spacing: 0.02em;
+}
+
+#labyrinth-design-surface #volume-slider {
+    display: block;
+    width: 100%;
+    height: 28px;
+    margin: 4px 0 0;
+    background: transparent;
+    -webkit-appearance: none;
+    appearance: none;
+    accent-color: #5c6bc0;
+}
+
+#labyrinth-design-surface #volume-slider:focus {
+    outline: none;
+}
+
+#labyrinth-design-surface #volume-slider:focus-visible {
+    outline: 2px solid rgba(102, 126, 234, 0.85);
+    outline-offset: 3px;
+    border-radius: 4px;
+}
+
+#labyrinth-design-surface #volume-slider::-webkit-slider-runnable-track {
+    height: 10px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #e8eaf6, #c5cae9);
+    border: 1px solid rgba(63, 81, 181, 0.35);
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+#labyrinth-design-surface #volume-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 22px;
+    height: 22px;
+    margin-top: -6px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.95);
+    background: linear-gradient(145deg, #7e8eea, #5c6bc0 45%, #3949ab);
+    box-shadow: 0 2px 8px rgba(57, 73, 171, 0.45);
+    cursor: pointer;
+}
+
+#labyrinth-design-surface #volume-slider::-moz-range-track {
+    height: 10px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #e8eaf6, #c5cae9);
+    border: 1px solid rgba(63, 81, 181, 0.35);
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+#labyrinth-design-surface #volume-slider::-moz-range-thumb {
+    width: 22px;
+    height: 22px;
+    border: 2px solid rgba(255, 255, 255, 0.95);
+    border-radius: 50%;
+    background: linear-gradient(145deg, #7e8eea, #5c6bc0 45%, #3949ab);
+    box-shadow: 0 2px 8px rgba(57, 73, 171, 0.45);
+    cursor: pointer;
+}
+
 /* コントロールボタン */
 .controls {
     text-align: center;
@@ -489,38 +650,138 @@ body:has(#labyrinth-root) {
     gap: 10px;
 }
 
-/* 💡 新規追加: ジョイスティックのスタイル */
-#joystick-container {
-    /* 中央に配置するためのコンテナ */
-    width: 150px;
-    height: 150px;
-    display: none; /* デフォルトでは非表示 */
-    justify-content: center;
-    align-items: center;
-    margin: 10px auto;
-    touch-action: none; /* タッチスクロールなどのブラウザ操作を無効化 */
+/* 十字方向ボタン（テンキー 8=上, 4=左, 6=右, 2=下）。全体を 1:1 の正方形グリッドに */
+.direction-pad {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-rows: 1fr 1fr 1fr;
+    gap: clamp(10px, 2vmin, 18px);
+    width: min(72vmin, 92vw, 400px);
+    aspect-ratio: 1 / 1;
+    height: auto;
+    max-width: 100%;
+    margin: 0;
+    flex: 0 0 auto;
+    touch-action: manipulation;
+    user-select: none;
+    -webkit-user-select: none;
 }
 
-#joystick-base {
+#dpad-up {
+    grid-column: 2;
+    grid-row: 1;
+}
+
+#dpad-left {
+    grid-column: 1;
+    grid-row: 2;
+}
+
+#dpad-right {
+    grid-column: 3;
+    grid-row: 2;
+}
+
+#dpad-down {
+    grid-column: 2;
+    grid-row: 3;
+}
+
+.direction-pad-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+    padding: 0;
+    min-width: 0;
+    min-height: 0;
     width: 100%;
     height: 100%;
-    border-radius: 50%;
-    background: rgba(100, 100, 100, 0.4); /* 半透明のベース */
-    border: 2px solid #666;
-    position: relative;
+    border: 3px solid rgba(63, 81, 181, 0.5);
+    border-radius: 18px;
+    font-size: clamp(1.75rem, 6.2vmin, 2.45rem);
+    font-weight: 800;
+    line-height: 1;
+    color: #fff;
+    cursor: pointer;
+    background: linear-gradient(145deg, #7e8eea, #5c6bc0 40%, #3949ab);
+    box-shadow: 0 5px 16px rgba(57, 73, 171, 0.38);
+    transition: transform 0.08s ease, box-shadow 0.15s ease, filter 0.12s ease;
+    -webkit-tap-highlight-color: transparent;
 }
 
-#joystick-handle {
-    width: 50px;
-    height: 50px;
-    border-radius: 50%;
-    background: #333;
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
-    touch-action: none;
+.direction-pad-btn:hover {
+    filter: brightness(1.05);
+}
+
+.direction-pad-btn:active,
+.direction-pad-btn.direction-pad-btn--pressed {
+    transform: scale(0.96);
+    box-shadow: 0 2px 8px rgba(57, 73, 171, 0.45);
+}
+
+#labyrinth-design-surface .direction-pad-btn:focus-visible {
+    outline: 3px solid rgba(102, 126, 234, 0.9);
+    outline-offset: 2px;
+}
+
+/* 矢印ブロックを画面左端／右端へ。トグルは常に十字の「中央側」（親指が届きやすい位置） */
+#mobile-controls.controls--dpad-align-start {
+    flex-direction: row;
+    justify-content: flex-start;
+}
+
+#mobile-controls.controls--dpad-align-end {
+    flex-direction: row;
+    justify-content: flex-end;
+}
+
+#mobile-controls.controls--dpad-align-end .direction-pad {
+    order: 2;
+}
+
+#mobile-controls.controls--dpad-align-end .dpad-align-toggle {
+    order: 1;
+}
+
+/* 位置トグル: 矢印ボタンと同系の見た目・正方形 */
+#labyrinth-design-surface .dpad-align-toggle {
+    flex: 0 0 auto;
+    box-sizing: border-box;
+    width: clamp(72px, 26vmin, 112px);
+    min-width: 72px;
+    min-height: 72px;
+    aspect-ratio: 1 / 1;
+    height: auto;
+    margin: 0;
+    padding: 0;
+    border: 3px solid rgba(63, 81, 181, 0.5);
+    border-radius: 18px;
+    font-size: clamp(1.45rem, 5.5vmin, 2.15rem);
+    font-weight: 800;
+    line-height: 1;
+    color: #fff;
+    cursor: pointer;
+    background: linear-gradient(145deg, #7e8eea, #5c6bc0 40%, #3949ab);
+    box-shadow: 0 5px 16px rgba(57, 73, 171, 0.38);
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    transition: transform 0.08s ease, box-shadow 0.15s ease, filter 0.12s ease;
+    align-self: center;
+}
+
+#labyrinth-design-surface .dpad-align-toggle:hover {
+    filter: brightness(1.05);
+}
+
+#labyrinth-design-surface .dpad-align-toggle:active {
+    transform: scale(0.96);
+    box-shadow: 0 2px 8px rgba(57, 73, 171, 0.45);
+}
+
+#labyrinth-design-surface .dpad-align-toggle:focus-visible {
+    outline: 3px solid rgba(102, 126, 234, 0.9);
+    outline-offset: 2px;
 }
 
 
@@ -606,26 +867,24 @@ body:has(#labyrinth-root) {
         width: 100%;
     }
 
-    /* コントロールを上書きして、ジョイスティックを表示 */
-    .controls {
-        /* 💡 変更: モバイルではflexで表示 */
-        display: flex; 
-        flex-basis: auto;
-        gap: 5px;
-        align-self: center;
-    }
-    
-    #joystick-container {
-        /* 💡 変更: モバイルでのみジョイスティックを表示 */
-        display: flex; 
+    /* モバイル: 十字＋トグルを横一列でサイドバー全幅にし、justify で左端／右端に矢印ブロックを寄せる */
+    #labyrinth-design-surface #mobile-controls.controls {
+        display: flex;
+        flex-direction: row;
+        flex-wrap: nowrap;
+        align-items: center;
+        width: 100%;
+        max-width: 100%;
+        box-sizing: border-box;
+        margin-inline: 0;
+        align-self: stretch;
+        gap: clamp(10px, 2.5vmin, 16px);
     }
 
     .game-container {
         max-width: 100%;
         padding: 10px;
-        /* 修正: ゲームコンテナ全体が画面の高さを超えた場合にスクロール可能にする */
-        max-height: calc(100dvh - 40px);
-        /* .screen のpadding (上下20px*2=40px)を引く */
+        max-height: 100%;
         overflow-y: auto;
     }
 

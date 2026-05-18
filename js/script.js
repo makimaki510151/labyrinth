@@ -470,12 +470,14 @@ const LABYRINTH_SHELL_HTML = `
                 <canvas id="maze-canvas" width="400" height="400"></canvas>
             </div>
             <div class="game-sidebar">
-                <div class="controls" id="mobile-controls">
-                    <div id="joystick-container">
-                        <div id="joystick-base">
-                            <div id="joystick-handle"></div>
-                        </div>
+                <div class="controls controls--dpad-align-start" id="mobile-controls">
+                    <div class="direction-pad" role="group" aria-label="移動（テンキー2468相当の十字）">
+                        <button type="button" class="direction-pad-btn" id="dpad-up" data-dx="0" data-dy="-1" aria-label="上">↑</button>
+                        <button type="button" class="direction-pad-btn" id="dpad-left" data-dx="-1" data-dy="0" aria-label="左">←</button>
+                        <button type="button" class="direction-pad-btn" id="dpad-right" data-dx="1" data-dy="0" aria-label="右">→</button>
+                        <button type="button" class="direction-pad-btn" id="dpad-down" data-dx="0" data-dy="1" aria-label="下">↓</button>
                     </div>
+                    <button type="button" id="dpad-align-toggle" class="dpad-align-toggle" aria-pressed="false" aria-label="矢印を画面の右寄せに切り替え（利き手に合わせて親指で押しやすい位置へ）" title="矢印を画面右寄せへ">⇄</button>
                 </div>
                 <div class="volume-control">
                     <label for="volume-slider">音量調節</label>
@@ -554,10 +556,6 @@ function ensureLabyrinthScaleHierarchy() {
     frame.appendChild(surface);
 }
 
-/** 横持ち時の論理解像度（デフォルト）。縦持ちでは 720×960 に入れ替え */
-const LABYRINTH_DEFAULT_W = 960;
-const LABYRINTH_DEFAULT_H = 720;
-
 function labyrinthRootContentSize() {
     const root = document.getElementById('labyrinth-root');
     const vv = window.visualViewport;
@@ -592,22 +590,20 @@ function syncLabyrinthDesignScale() {
         return;
     }
 
-    const portrait = innerH > innerW;
-    const DW = portrait ? LABYRINTH_DEFAULT_H : LABYRINTH_DEFAULT_W;
-    const DH = portrait ? LABYRINTH_DEFAULT_W : LABYRINTH_DEFAULT_H;
-
-    /* 常に contain: 横・縦とも親内にはみ出さない。フレーム寸法はアスペクト比 DW:DH のまま */
-    const rawS = Math.min(innerW / DW, innerH / DH);
-    const s = Math.min(Math.max(rawS, 0.0001), 4);
+    /* 論理サイズ＝ルートのコンテンツ矩形（フレームと同一）。transform による縮小・余白は行わない */
+    const DW = innerW;
+    const DH = innerH;
 
     if (root) {
         root.style.setProperty('--labyrinth-design-w', `${DW}px`);
         root.style.setProperty('--labyrinth-design-h', `${DH}px`);
     }
 
-    frame.style.width = `${DW * s}px`;
-    frame.style.height = `${DH * s}px`;
-    surface.style.transform = `scale(${s})`;
+    frame.style.width = '';
+    frame.style.height = '';
+    surface.style.left = '';
+    surface.style.top = '';
+    surface.style.transform = '';
 }
 
 function bindLabyrinthScaleListenersOnce() {
@@ -650,7 +646,7 @@ class MazeGame {
         this.moveTimer = null;
         this.moveInterval = 200; // 連続移動の間隔 (ms)
 
-        // 💡 追加: ジョイスティックの状態
+        /** 十字ボタン長押し連続移動用（旧ジョイスティックと同じタイマーと連携） */
         this.joystick = {
             active: false,
             direction: { dx: 0, dy: 0 }
@@ -672,7 +668,7 @@ class MazeGame {
         bindLabyrinthScaleListenersOnce();
         await this.determineMaxLevel(); // 💡 変更: 最大レベルを決定
         this.setupEventListeners();
-        this.setupJoystick(); // 💡 追加: ジョイスティックのセットアップ
+        this.setupMobileDirectionPad();
         this.initAudio(); // 💡 追加: オーディオコンテキストの初期化
         this.showScreen('title');
         requestAnimationFrame(() => syncLabyrinthDesignScale());
@@ -873,181 +869,119 @@ class MazeGame {
     }
     
     /**
-     * 💡 新規追加: ジョイスティックのタッチ/マウスイベントを設定
+     * スマホ用: テンキー 8・4・6・2 に相当する十字の矢印ボタン（長押しで連続移動）
      */
-    setupJoystick() {
-        const base = document.getElementById('joystick-base');
-        const handle = document.getElementById('joystick-handle');
-        const container = document.getElementById('joystick-container');
+    setupMobileDirectionPad() {
+        const root = document.getElementById('mobile-controls');
+        if (!root) {
+            return;
+        }
 
-        if (!base || !handle || !container) return; // 要素がない場合はスキップ
+        const DPAD_ALIGN_KEY = 'labyrinth-dpad-align';
+        const toggle = document.getElementById('dpad-align-toggle');
 
-        // 💡 連続移動のためのタイマー処理を管理する関数
-        const startContinuousMove = () => {
-            const { dx, dy } = this.joystick.direction;
-            if (dx === 0 && dy === 0) return; // 移動方向がない場合は開始しない
-
-            if (this.moveTimer) return; // 既に実行中の場合は何もしない
-
-            // 最初の移動を実行
-            this.movePlayer(dx, dy);
-
-            // 連続移動タイマーを設定
-            this.moveTimer = setInterval(() => {
-                // 💡 移動中に方向が変わる可能性があるので、現在の方向を再取得して実行
-                this.movePlayer(this.joystick.direction.dx, this.joystick.direction.dy);
-            }, this.moveInterval);
+        const applyDpadAlign = (alignEnd) => {
+            root.classList.remove('controls--dpad-align-start', 'controls--dpad-align-end');
+            root.classList.add(alignEnd ? 'controls--dpad-align-end' : 'controls--dpad-align-start');
+            try {
+                localStorage.setItem(DPAD_ALIGN_KEY, alignEnd ? 'end' : 'start');
+            } catch (_) {
+                /* noop */
+            }
+            if (toggle) {
+                toggle.setAttribute('aria-pressed', alignEnd ? 'true' : 'false');
+                toggle.textContent = '⇄';
+                toggle.setAttribute(
+                    'aria-label',
+                    alignEnd
+                        ? '矢印を画面の左寄せに切り替え（利き手に合わせて親指で押しやすい位置へ）'
+                        : '矢印を画面の右寄せに切り替え（利き手に合わせて親指で押しやすい位置へ）'
+                );
+                toggle.setAttribute(
+                    'title',
+                    alignEnd ? '矢印を画面左寄せへ' : '矢印を画面右寄せへ'
+                );
+            }
         };
 
-        // 💡 連続移動のためのタイマー処理を停止する関数
-        const stopContinuousMove = () => {
+        let storedAlign = null;
+        try {
+            storedAlign = localStorage.getItem(DPAD_ALIGN_KEY);
+        } catch (_) {
+            /* noop */
+        }
+        applyDpadAlign(storedAlign === 'end');
+
+        if (toggle) {
+            toggle.addEventListener('click', (e) => {
+                e.preventDefault();
+                const isEnd = root.classList.contains('controls--dpad-align-end');
+                applyDpadAlign(!isEnd);
+            });
+        }
+
+        const buttons = root.querySelectorAll('.direction-pad-btn');
+        if (!buttons.length) {
+            return;
+        }
+
+        const stopPadRepeat = () => {
             if (this.moveTimer) {
                 clearInterval(this.moveTimer);
                 this.moveTimer = null;
             }
-        };
-
-        const handleMove = (clientX, clientY) => {
-            // 💡 ジョイスティックコンテナに対する相対位置を計算
-            const containerRect = container.getBoundingClientRect(); // 位置が変わりうるため毎回再取得
-            const centerX = containerRect.width / 2;
-            const centerY = containerRect.height / 2;
-            const maxDist = (containerRect.width / 2) - (handle.offsetWidth / 2); // ベース半径 - ハンドル半径
-            
-            const x = clientX - containerRect.left - centerX;
-            const y = clientY - containerRect.top - centerY;
-            const distance = Math.sqrt(x * x + y * y);
-            
-            let normalizedX = x;
-            let normalizedY = y;
-            let currentDist = distance;
-
-            // 💡 ハンドルがベースからはみ出さないようにクランプ
-            if (distance > maxDist) {
-                const angle = Math.atan2(y, x);
-                normalizedX = maxDist * Math.cos(angle);
-                normalizedY = maxDist * Math.sin(angle);
-                currentDist = maxDist;
-            }
-
-            // 💡 ハンドルの位置を更新 (中心からの移動量として適用)
-            // 変換の基準が中央(-50%, -50%)になっているため、そのオフセットを考慮
-            handle.style.transform = `translate(calc(-50% + ${normalizedX}px), calc(-50% + ${normalizedY}px))`;
-
-
-            // 💡 移動方向を計算（4方向を想定。斜め移動は無効化）
-            let dx = 0;
-            let dy = 0;
-            const threshold = maxDist * 0.4; // 閾値を最大移動距離の40%に設定
-
-            if (currentDist > threshold) {
-                const absX = Math.abs(normalizedX);
-                const absY = Math.abs(normalizedY);
-
-                // 💡 バグ修正: XとYの絶対値を比較し、大きい方の軸のみを採用することで、4方向制御を保証
-                if (absX > absY) {
-                    // X軸方向の判断
-                    dx = normalizedX > 0 ? 1 : -1;
-                    dy = 0;
-                } else {
-                    // Y軸方向の判断
-                    dx = 0;
-                    dy = normalizedY > 0 ? 1 : -1;
-                }
-            }
-
-
-            // 💡 方向が変更されたか、または移動が開始された場合、タイマーをリセット
-            const directionChanged = dx !== this.joystick.direction.dx || dy !== this.joystick.direction.dy;
-
-            if (directionChanged) {
-                // 古いタイマーを停止
-                stopContinuousMove();
-
-                this.joystick.direction = { dx, dy };
-                this.joystick.active = true;
-
-                // 新しい方向でタイマーを開始 (dxまたはdyが0でない場合)
-                if (dx !== 0 || dy !== 0) {
-                    startContinuousMove();
-                } else {
-                    // 閾値以下に戻った場合は active を false にする
-                    this.joystick.active = false;
-                }
-            }
-        };
-
-        // 💡 終了処理（指を離した/マウスを離した時）
-        const endMove = () => {
-            this.joystick.active = false;
             this.joystick.direction = { dx: 0, dy: 0 };
-            stopContinuousMove();
-            
-            // ハンドルを中央に戻す
-            handle.style.transform = 'translate(-50%, -50%)';
-
-            // リスナーを削除
-            document.removeEventListener('mousemove', onMouseMove);
-            document.removeEventListener('mouseup', onMouseUp);
-            document.removeEventListener('touchmove', onTouchMove);
-            document.removeEventListener('touchend', onTouchEnd);
-            document.removeEventListener('touchcancel', onTouchEnd);
+            this.joystick.active = false;
         };
-        
-        // 💡 実際のマウス/タッチイベントハンドラー
-        const onMouseMove = (e) => {
-            if (this.gameState.currentScreen === 'game') {
-                handleMove(e.clientX, e.clientY);
+
+        const startPadRepeat = (dx, dy) => {
+            stopPadRepeat();
+            this.joystick.direction = { dx, dy };
+            this.joystick.active = true;
+            if (this.gameState.currentScreen !== 'game') {
+                return;
             }
-        };
-        const onMouseUp = (e) => {
-            endMove();
-        };
-
-        const onTouchMove = (e) => {
-            if (this.gameState.currentScreen === 'game' && e.touches.length === 1) {
-                // スクロールを防止し、ジョイスティック操作に専念させる
-                e.preventDefault(); 
-                handleMove(e.touches[0].clientX, e.touches[0].clientY);
-            }
-        };
-        const onTouchEnd = (e) => {
-            // 複数の指で操作している場合は、最後の指が離れた時のみ終了させる
-            if (e.touches.length === 0) {
-                endMove();
-            }
+            this.movePlayer(dx, dy);
+            this.moveTimer = setInterval(() => {
+                if (this.gameState.currentScreen === 'game') {
+                    this.movePlayer(dx, dy);
+                }
+            }, this.moveInterval);
         };
 
-        // 💡 開始処理 (mousedown/touchstart)
-        const startMove = (clientX, clientY) => {
-            if (this.gameState.currentScreen !== 'game') return;
+        buttons.forEach((btn) => {
+            const dx = Number(btn.dataset.dx) || 0;
+            const dy = Number(btn.dataset.dy) || 0;
 
-            // 移動/終了リスナーを設定
-            document.addEventListener('mousemove', onMouseMove);
-            document.addEventListener('mouseup', onMouseUp);
-            document.addEventListener('touchmove', onTouchMove, { passive: false });
-            document.addEventListener('touchend', onTouchEnd);
-            document.addEventListener('touchcancel', onTouchEnd);
+            const onPointerDown = (e) => {
+                if (e.pointerType === 'mouse' && e.button !== 0) {
+                    return;
+                }
+                e.preventDefault();
+                if (this.gameState.currentScreen !== 'game') {
+                    return;
+                }
+                try {
+                    btn.setPointerCapture(e.pointerId);
+                } catch (_) {
+                    /* noop */
+                }
+                btn.classList.add('direction-pad-btn--pressed');
+                startPadRepeat(dx, dy);
+            };
 
-            // 初回の位置計算と移動開始
-            handleMove(clientX, clientY);
-        };
+            const onPointerEnd = (e) => {
+                if (typeof btn.hasPointerCapture === 'function' && btn.hasPointerCapture(e.pointerId)) {
+                    btn.releasePointerCapture(e.pointerId);
+                }
+                btn.classList.remove('direction-pad-btn--pressed');
+                stopPadRepeat();
+            };
 
-        // イベントリスナーをハンドルに追加
-        handle.addEventListener('mousedown', (e) => {
-            e.preventDefault(); // ドラッグ選択を防止
-            startMove(e.clientX, e.clientY);
-        });
-        // 💡 コンテナ全体をタッチエリアとする
-        container.addEventListener('touchstart', (e) => {
-            e.preventDefault(); // デフォルトのタッチ操作を防止
-            if (e.touches.length === 1) {
-                startMove(e.touches[0].clientX, e.touches[0].clientY);
-            }
-        }, { passive: false });
-
-        window.addEventListener('resize', () => {
-            // handleMove内でRectを取得するため、ここでは特に処理は不要
+            btn.addEventListener('pointerdown', onPointerDown);
+            btn.addEventListener('pointerup', onPointerEnd);
+            btn.addEventListener('pointercancel', onPointerEnd);
+            btn.addEventListener('lostpointercapture', onPointerEnd);
         });
     }
 

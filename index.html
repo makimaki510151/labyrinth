@@ -98,12 +98,14 @@
                 </div>
                 
                 <div class="game-sidebar">
-                    <div class="controls" id="mobile-controls">
-                        <div id="joystick-container">
-                            <div id="joystick-base">
-                                <div id="joystick-handle"></div>
-                            </div>
+                    <div class="controls controls--dpad-align-start" id="mobile-controls">
+                        <div class="direction-pad" role="group" aria-label="移動（テンキー2468相当の十字）">
+                            <button type="button" class="direction-pad-btn" id="dpad-up" data-dx="0" data-dy="-1" aria-label="上">↑</button>
+                            <button type="button" class="direction-pad-btn" id="dpad-left" data-dx="-1" data-dy="0" aria-label="左">←</button>
+                            <button type="button" class="direction-pad-btn" id="dpad-right" data-dx="1" data-dy="0" aria-label="右">→</button>
+                            <button type="button" class="direction-pad-btn" id="dpad-down" data-dx="0" data-dy="1" aria-label="下">↓</button>
                         </div>
+                        <button type="button" id="dpad-align-toggle" class="dpad-align-toggle" aria-pressed="false" aria-label="矢印を画面の右寄せに切り替え（利き手に合わせて親指で押しやすい位置へ）" title="矢印を画面右寄せへ">⇄</button>
                     </div>
                     
                     <div class="volume-control">
